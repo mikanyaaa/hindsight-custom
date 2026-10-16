@@ -1,0 +1,77 @@
+.root {
+  color: inherit;
+}
+.toolbar {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 21;
+  display: flex;
+  gap: 6px;
+}
+.toolbar button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid #27272a;
+  background: #18181b;
+  color: #a1a1aa;
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+.toolbar button:hover {
+  opacity: 1;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.75rem;
+}
+.legend .scopes {
+  padding: 0;
+}
+.heat {
+  width: 8rem;
+  height: 0.4rem;
+  background: linear-gradient(to right, rgb(56, 130, 220), rgb(170, 130, 200), rgb(240, 100, 60));
+}
+.controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding: 0.65rem;
+  font-size: 0.8rem;
+}
+.controls button {
+  border: 1px solid currentColor;
+  border-radius: 0.35rem;
+  padding: 0.25rem 0.6rem;
+}
+.controls button[aria-pressed="true"] {
+  background: #0b0726;
+  color: #00ffff;
+}
+.controls button:focus-visible {
+  outline: 2px solid #9d00ff;
+  outline-offset: 3px;
+}
+.counts {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.75rem;
+}
+.scopes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  list-style: none;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.75rem;
+}

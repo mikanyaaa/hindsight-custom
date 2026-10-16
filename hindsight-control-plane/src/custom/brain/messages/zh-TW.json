@@ -1,0 +1,7 @@
+{
+  "layout": "記憶配置",
+  "network": "網路",
+  "brain": "大腦",
+  "counts": "顯示已載入的 {loaded} 個節點中的 {shown} 個，以及 {loadedEdges} 條連結中的 {edges} 條（靜止檢視）。",
+  "scopes": "記憶範圍"
+}

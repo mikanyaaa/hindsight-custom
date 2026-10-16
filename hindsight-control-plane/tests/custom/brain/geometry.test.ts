@@ -5,7 +5,7 @@ import {
   brainHalfThickness,
   isInsideHemisphere,
   projectBrainPoint,
-} from "../geometry";
+} from "@/custom/brain/geometry";
 
 describe("brain geometry", () => {
   it("defines two lobed hemispheres separated by an empty fissure", () => {

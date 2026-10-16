@@ -1,0 +1,7 @@
+{
+  "layout": "Distribución de recuerdos",
+  "network": "Red",
+  "brain": "Cerebro",
+  "counts": "Se muestran {shown} de {loaded} nodos cargados y {edges} de {loadedEdges} enlaces cargados (vista en reposo).",
+  "scopes": "Ámbitos de recuerdos"
+}

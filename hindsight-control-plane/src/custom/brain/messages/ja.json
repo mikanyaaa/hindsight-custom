@@ -1,0 +1,7 @@
+{
+  "layout": "メモリの配置",
+  "network": "ネットワーク",
+  "brain": "脳",
+  "counts": "読み込んだ {loaded} 個のノード中 {shown} 個、{loadedEdges} 本のリンク中 {edges} 本を表示（通常表示）。",
+  "scopes": "メモリの範囲"
+}

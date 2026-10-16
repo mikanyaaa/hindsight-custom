@@ -5,6 +5,10 @@ import type { CSSProperties } from "react";
 import { useTranslations } from "next-intl";
 import { prepare, layout, prepareWithSegments, layoutWithLines } from "@chenglou/pretext";
 import type { GraphData, GraphNode, GraphLink } from "./graph-data";
+// CUSTOM-HOOK: brain-network-imports begin
+import type { BrainRenderer } from "@/custom/brain/render-model";
+import { BRAIN_ENABLED } from "@/custom/brain/feature";
+// CUSTOM-HOOK: brain-network-imports end
 
 // ============================================================================
 // Types
@@ -37,6 +41,9 @@ const MOTION_STORAGE_KEY = "constellation-motion";
 // ============================================================================
 
 export interface ConstellationProps {
+  // CUSTOM-HOOK: brain-network-contract begin
+  brainRenderer?: BrainRenderer;
+  // CUSTOM-HOOK: brain-network-contract end
   data: GraphData;
   height?: number;
   onNodeClick?: (node: GraphNode) => void;
@@ -243,7 +250,15 @@ function toolbarBtnStyle(isDark: boolean): CSSProperties {
 // Component
 // ============================================================================
 
-export function Constellation({
+// CUSTOM-HOOK: brain-network-dispatch begin
+export function Constellation(props: ConstellationProps) {
+  if (BRAIN_ENABLED && props.brainRenderer && !props.nodeGroupsFn)
+    return props.brainRenderer.render(props);
+  return <NetworkConstellation {...props} />;
+}
+
+function NetworkConstellation({
+  // CUSTOM-HOOK: brain-network-dispatch end
   data,
   height = 700,
   onNodeClick,

@@ -1,0 +1,7 @@
+{
+  "layout": "Disposition des souvenirs",
+  "network": "Réseau",
+  "brain": "Cerveau",
+  "counts": "{shown} sur {loaded} nœuds chargés ; {edges} sur {loadedEdges} liens chargés (vue au repos).",
+  "scopes": "Périmètres des souvenirs"
+}

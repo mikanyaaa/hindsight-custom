@@ -1,0 +1,7 @@
+{
+  "layout": "Memory layout",
+  "network": "Network",
+  "brain": "Brain",
+  "counts": "Showing {shown} of {loaded} loaded nodes; {edges} of {loadedEdges} loaded links (idle view).",
+  "scopes": "Memory scopes"
+}

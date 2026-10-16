@@ -49,6 +49,14 @@ import {
 import { MemoryDetailModal } from "./memory-detail-modal";
 import { convertHindsightGraphData, GraphNode } from "./graph-data";
 import { Constellation } from "./constellation";
+// CUSTOM-HOOK: brain-network-entry begin
+import dynamic from "next/dynamic";
+import { BRAIN_ENABLED, brainRequestLimit } from "@/custom/brain/feature";
+import { useBrainMode } from "@/custom/brain/preference";
+const MemoryConstellation = BRAIN_ENABLED
+  ? dynamic(() => import("@/custom/brain/integration"))
+  : Constellation;
+// CUSTOM-HOOK: brain-network-entry end
 import { TagFilterInput } from "./tag-filter-input";
 import { ObservationScopeFilter, ObservationScope } from "./observation-scope-filter";
 import { ScatterChart, Plus, FileText } from "lucide-react";
@@ -95,8 +103,17 @@ export function DataView({
   const t = useTranslations("dataView");
   const tAddDoc = useTranslations("addDocument");
   const { currentBank } = useBank();
+  // CUSTOM-HOOK: brain-network-mode begin
+  const brainMode = useBrainMode();
+  // CUSTOM-HOOK: brain-network-mode end
   const [viewMode, setViewMode] = useState<ViewMode>("constellation");
   const [compactMode, setCompactMode] = useState(compact);
+  // CUSTOM-HOOK: brain-network-active begin
+  const brainActive =
+    BRAIN_ENABLED &&
+    brainMode.layoutMode === "brain" &&
+    (compactMode || viewMode === "constellation");
+  // CUSTOM-HOOK: brain-network-active end
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -173,7 +190,9 @@ export function DataView({
       const graphData: any = await client.getGraph({
         bank_id: currentBank,
         type: factType,
-        limit: limit ?? fetchLimit,
+        // CUSTOM-HOOK: brain-network-request-limit begin
+        limit: brainRequestLimit(limit ?? fetchLimit, brainActive),
+        // CUSTOM-HOOK: brain-network-request-limit end
         q,
         tags,
         tags_match: tagsMatch,
@@ -433,11 +452,20 @@ export function DataView({
     // StrictMode, and any redundant re-render) can't re-issue the same /api/graph
     // query. Manual reloads (search, load-more, consolidation poll) call loadData
     // directly and intentionally bypass this guard.
-    const sig = JSON.stringify([contextKey, tags ?? null, match ?? null]);
+    // CUSTOM-HOOK: brain-network-request-signature begin
+    const sig = JSON.stringify([
+      contextKey,
+      tags ?? null,
+      match ?? null,
+      ...(brainActive ? ["brain"] : []),
+    ]);
+    // CUSTOM-HOOK: brain-network-request-signature end
     if (sig === lastAutoLoadSig.current) return;
     lastAutoLoadSig.current = sig;
     loadData(undefined, searchQuery || undefined, tags, match);
-  }, [factType, currentBank, documentId, chunkId, tagFilters, selectedScope]);
+    // CUSTOM-HOOK: brain-network-request-deps begin
+  }, [factType, currentBank, documentId, chunkId, tagFilters, selectedScope, brainActive]);
+  // CUSTOM-HOOK: brain-network-request-deps end
 
   // Load the available observation scopes for the scope filter dropdown.
   const loadScopes = useCallback(async () => {
@@ -802,7 +830,9 @@ export function DataView({
               )}
 
               <div className="border border-border rounded-lg overflow-hidden">
-                <Constellation
+                {/* CUSTOM-HOOK: brain-network-view begin */}
+                <MemoryConstellation
+                  {...brainMode}
                   key={compactMode ? "compact" : "full"}
                   data={graph2DData}
                   height={compactMode ? 300 : 700}
@@ -841,6 +871,7 @@ export function DataView({
                       : undefined
                   }
                 />
+                {/* CUSTOM-HOOK: brain-network-view end */}
               </div>
             </div>
           )}

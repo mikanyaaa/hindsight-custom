@@ -1,0 +1,7 @@
+{
+  "layout": "记忆布局",
+  "network": "网络",
+  "brain": "大脑",
+  "counts": "显示已加载的 {loaded} 个节点中的 {shown} 个，以及 {loadedEdges} 条连接中的 {edges} 条（静止视图）。",
+  "scopes": "记忆范围"
+}

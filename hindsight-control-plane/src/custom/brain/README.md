@@ -1,41 +1,43 @@
-# Brain geometry (implementation step 1)
+# Optional brain layout
 
-Source plan: the private development repo (PR #1),
-`docs/plan-amendments` at `295c29f59ec6fe04a5a82883d682dc7633858ef2`:
-`docs/plans/AMENDMENTS-2026-10-15.md` and `docs/plans/ai-brain-network-v2.md`.
-This branch starts at `origin/main`, without merging the documentation branch.
+Implementation follows the revised plan from the private development repo (PR #1),
+`docs/plan-amendments` at `295c29f59ec6fe04a5a82883d682dc7633858ef2`.
+The merged `brain-v1` geometry is unchanged. See `CUSTOM.md` for every shared-file
+hook and the existing CI scoping rules.
 
-`createBrainLayout` accepts readonly IDs and optional stable group keys, and returns
-source coordinates, fixed projected coordinates/depth and geometry-wide bounds.
-All coordinates are normalised, independent of pixels, viewport or visible node
-count. Input order is preserved; duplicate IDs are rejected. An absent group and
-an empty group are distinct. Changing a group intentionally changes the position.
+Build with `NEXT_PUBLIC_HINDSIGHT_BRAIN_ENABLED=true` to expose the optional mode
+in Memories. Missing, false or malformed values keep the existing network path.
+Only the exact string `true` enables it. A container-start environment change
+does not change an already-built client. Network remains the default; only a
+user's explicit mode preference can restore Brain when enabled.
 
-The original cubic contours have a crown, lobes, basal indentation and separated
-hemispheres. Rounded thickness and a fixed orthographic yaw/pitch supply 2.5D depth.
-Fissure and furrows are decorative geometry, never memories or biological regions.
-An empty input produces no nodes. No UI, renderer, adapter, flag, storage, network
-or authentication integration exists in this step.
+- `geometry.ts`, `layout.ts`, `types.ts`: original normalised hemispheres,
+  rounded depth and deterministic version/ID/group positions. Work is bounded
+  and independent of neighbours; geometry-wide bounds never shrink with filters.
+- `adapter.ts`: deduplicate real IDs, cap at 500, preserve metadata, parallel
+  types, loops and direction; omit unknown endpoints. Interleave link types,
+  prioritising weight within each type for deterministic edge budgets.
+- `canvas.tsx`, `controller.ts`, `scene.ts`: local Canvas lifecycle, controls,
+  events, resize/fullscreen, scene preparation and SVG download. The scene preserves
+  upstream heat colours and size semantics; local legends preserve their scales.
+- `renderer.ts`, `render-model.ts`: renderer contract and drawing primitives. Canvas
+  and SVG share transforms, paths, radii and safe hover text. SVG uses the live
+  camera and current link selection.
+- `integration.tsx`, `preference.ts`, `feature.ts`: lazy controls/provider,
+  exact build flag, mode-only preference and positive API request budget.
+- `messages/`, `brain.module.css`: isolated namespace for ten locales and scoped
+  control styles. No global stylesheet, locale loader or token changes.
 
-Sampling uses at most 12 candidates per ID, then a guaranteed interior rectangle
-with independently hashed offsets. Every dimension hashes the full structured
-identity again, so a primary 32-bit hash collision does not collapse a whole
-position. There is no neighbour-dependent displacement or minimum pixel spacing
-guarantee; arbitrarily close points remain possible in a continuous layout. Work
-is linear in node count for this fixed geometry. Bump `BRAIN_GEOMETRY_VERSION`
-whenever geometry, projection, hashing or sampling changes.
+The static brain requests frames only on interaction/camera settling. The existing
+mouse/wheel, fullscreen, hit testing and real-ID details callback are handled locally.
+Brain hover text is drawn safely on Canvas
+and escaped for SVG. Empty banks create no decorative nodes.
 
-## Configuration register
+Tests are under `tests/custom/brain/`, including the moved geometry regressions.
+Standard `npm test` and knip discover them without special entries. The hook test
+recursively guards every source marker, paired brain-prefixed names, and exact
+bidirectional coverage by the canonical `CUSTOM.md` hook register.
 
-No application integration hooks exist. The following minimal infrastructure
-changes outside this directory are required for this first implementation:
-
-| File                                       | Marker / change                               | Purpose                                                                                                                                                                                                                           |
-| ------------------------------------------ | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `hindsight-control-plane/vitest.config.ts` | `CUSTOM-HOOK: brain-test-discovery begin/end` | Add `src/custom/brain/__tests__/**/*.test.ts` while preserving existing patterns. `npm test` discovers these tests; knip's Vitest plugin follows their imports into the otherwise unconnected modules. No ignore/entry exemption. |
-| `.github/workflows/test.yml`               | `detect-changes.permissions.contents: read`   | Allow checkout in the private mirror alongside the existing PR read permission. No checks disabled.                                                                                                                               |
-
-Run the control plane's standard `npm test`, not an ad-hoc alternate test config.
-Knip's blocking check is `npx --yes knip@5 --no-progress --include files,dependencies,unlisted`
-from `hindsight-control-plane/`. Repository lint/dead-code scripts, TypeScript,
-tests, build and the local code-review workflow are required before push/PR.
+This step does not provide minimum pixel spacing, free rotation, touch/pinch
+hardening, stale-response/bank-reset repairs or measured device FPS. Those belong
+to later steps. The external access proxy and the CP access-key login are unchanged.

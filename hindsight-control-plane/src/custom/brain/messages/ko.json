@@ -1,0 +1,7 @@
+{
+  "layout": "메모리 배치",
+  "network": "네트워크",
+  "brain": "뇌",
+  "counts": "불러온 노드 {loaded}개 중 {shown}개, 연결 {loadedEdges}개 중 {edges}개 표시 (기본 보기).",
+  "scopes": "메모리 범위"
+}

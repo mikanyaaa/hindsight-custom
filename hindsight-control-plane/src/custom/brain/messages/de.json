@@ -1,0 +1,7 @@
+{
+  "layout": "Memory-Layout",
+  "network": "Netzwerk",
+  "brain": "Hirn",
+  "counts": "{shown} von {loaded} geladenen Knoten; {edges} von {loadedEdges} geladenen Verbindungen (Ruheansicht).",
+  "scopes": "Memory-Bereiche"
+}

@@ -1,0 +1,7 @@
+{
+  "layout": "Disposição de memórias",
+  "network": "Rede",
+  "brain": "Cérebro",
+  "counts": "A mostrar {shown} de {loaded} nós carregados e {edges} de {loadedEdges} ligações carregadas (vista em repouso).",
+  "scopes": "Âmbitos de memória"
+}

@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import * as geometry from "../geometry";
-import { brainNodes, COLLIDING_NODES } from "../fixtures/nodes";
-import { createBrainLayout } from "../layout";
-import type { BrainNodeInput } from "../types";
+import * as geometry from "@/custom/brain/geometry";
+import { brainNodes, COLLIDING_NODES } from "@/custom/brain/fixtures/nodes";
+import { createBrainLayout } from "@/custom/brain/layout";
+import type { BrainNodeInput } from "@/custom/brain/types";
 
 afterEach(() => vi.restoreAllMocks());
 
