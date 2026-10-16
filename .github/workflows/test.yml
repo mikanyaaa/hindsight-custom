@@ -14,6 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
+      # Private mirrors need repository contents access for actions/checkout.
+      contents: read
       pull-requests: read
     outputs:
       core: ${{ steps.filter.outputs.core }}
@@ -92,7 +94,11 @@ jobs:
       ci: ${{ steps.filter.outputs.ci }}
       # Secrets are available for internal PRs and workflow_dispatch.
       # Fork PRs via pull_request event do NOT have access to secrets.
-      has_secrets: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+      # CUSTOM-HOOK ci-fork-scope (see CUSTOM.md): the private mirror has no Actions
+      # secrets, so every job gated on has_secrets (API/LLM/embedding/client/CLI/
+      # integration/doc-example/embed/upgrade tests) is skipped outside upstream.
+      # To re-enable in the mirror: drop the `github.repository == ...` term.
+      has_secrets: ${{ github.repository == 'vectorize-io/hindsight' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     steps:
     - uses: actions/checkout@v6
 
@@ -1777,8 +1783,10 @@ jobs:
 
   build-docker-images:
     needs: [detect-changes]
+    # CUSTOM-HOOK ci-fork-scope: image builds need no secrets; only the smoke tests
+    # do (gated below). Keep building in the mirror even though has_secrets is false.
     if: >-
-      needs.detect-changes.outputs.has_secrets == 'true' &&
+      (needs.detect-changes.outputs.has_secrets == 'true' || github.repository != 'vectorize-io/hindsight') &&
       (github.event_name == 'workflow_dispatch' ||
       needs.detect-changes.outputs.core == 'true' ||
       needs.detect-changes.outputs.docker == 'true' ||
@@ -1862,15 +1870,17 @@ jobs:
     # Slim variants require external embedding providers; cp-only needs no
     # credentials at all, so the credential step stays gated on the variant
     # while the smoke test itself is gated on `smoke`.
+    # CUSTOM-HOOK ci-fork-scope: slim smoke tests need Vertex AI/Cohere secrets -> upstream only.
     - name: Setup GCP credentials for smoke test
-      if: matrix.variant == 'slim' && matrix.smoke
+      if: matrix.variant == 'slim' && matrix.smoke && (github.repository == 'vectorize-io/hindsight' || matrix.name == 'control-plane')
       run: |
         printf '%s' '${{ secrets.GCP_VERTEXAI_CREDENTIALS }}' > /tmp/gcp-credentials.json
         PROJECT_ID=$(jq -r '.project_id' /tmp/gcp-credentials.json)
         echo "HINDSIGHT_API_LLM_VERTEXAI_PROJECT_ID=$PROJECT_ID" >> $GITHUB_ENV
 
+    # CUSTOM-HOOK ci-fork-scope: only the secret-free control-plane leg is smoke tested in the mirror.
     - name: Smoke test - verify container starts
-      if: matrix.smoke
+      if: matrix.smoke && (github.repository == 'vectorize-io/hindsight' || matrix.name == 'control-plane')
       env:
         HINDSIGHT_API_LLM_PROVIDER: vertexai
         HINDSIGHT_API_LLM_MODEL: google/gemini-2.5-flash-lite
