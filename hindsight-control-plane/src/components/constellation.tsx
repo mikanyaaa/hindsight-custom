@@ -3,7 +3,7 @@
 import { useRef, useEffect, useCallback, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import { useTranslations } from "next-intl";
-import { prepare, layout, prepareWithSegments, layoutWithLines } from "@chenglou/pretext";
+import { prepareWithSegments, layoutWithLines } from "@chenglou/pretext";
 import type { GraphData, GraphNode, GraphLink } from "./graph-data";
 // CUSTOM-HOOK: brain-network-imports begin
 import type { BrainRenderer } from "@/custom/brain/render-model";
@@ -19,8 +19,8 @@ interface PreparedNode {
   /** screen x (world coords, before pan/zoom) */
   wx: number;
   wy: number;
-  prepared: ReturnType<typeof prepareWithSegments>;
-  preparedHeight: ReturnType<typeof prepare>;
+  prepared?: ReturnType<typeof prepareWithSegments>;
+  labelLayout?: { width: number; lines: ReturnType<typeof layoutWithLines>["lines"] };
   color: string;
   /** Color derived from link count (heat gradient) */
   heatColor: string;
@@ -283,6 +283,9 @@ function NetworkConstellation({
   const tooltipRef = useRef<HTMLDivElement>(null);
   const isDark = useIsDarkMode();
   const animRef = useRef<number>(0);
+  const requestDrawRef = useRef<() => void>(() => {});
+  const updateTooltipRef = useRef<(x: number, y: number) => void>(() => {});
+  const fittedNodesRef = useRef<PreparedNode[] | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Ambient motion (drift/pulse/shimmer) on-off, remembered globally — not per
@@ -305,6 +308,8 @@ function NetworkConstellation({
     setMotionEnabled((prev) => {
       const next = !prev;
       motionRef.current = next;
+      clockRef.current.lastFrameMs = 0;
+      requestDrawRef.current();
       localStorage.setItem(MOTION_STORAGE_KEY, next ? "on" : "off");
       return next;
     });
@@ -371,10 +376,12 @@ function NetworkConstellation({
     const count = data.nodes.length;
     const clusterKeys = clusterKeyFn ? data.nodes.map((n) => clusterKeyFn(n)) : null;
     const clusterMembers = new Map<string, number[]>();
+    const clusterMemberIndex = new Int32Array(count);
     if (clusterKeys) {
       clusterKeys.forEach((k, i) => {
         if (k == null) return;
         const arr = clusterMembers.get(k);
+        clusterMemberIndex[i] = arr?.length ?? 0;
         if (arr) arr.push(i);
         else clusterMembers.set(k, [i]);
       });
@@ -410,9 +417,8 @@ function NetworkConstellation({
       });
     }
 
-    // Prepare nodes: assign world positions + pretext-prepare text
+    // Prepare node positions and colors; card text is prepared only when drawn.
     const nodes: PreparedNode[] = data.nodes.map((node, i) => {
-      const text = node.label || node.id.substring(0, 12);
       const ck = clusterKeys ? clusterKeys[i] : null;
       const nodeGroupList = nodeGroups ? nodeGroups[i] : [];
       const color = vennActive
@@ -456,7 +462,7 @@ function NetworkConstellation({
       } else if (centroid) {
         // Scatter the node around its cluster centroid in a small disk.
         const members = clusterMembers.get(ck!)!;
-        const j = members.indexOf(i);
+        const j = clusterMemberIndex[i];
         const la = (j / Math.max(members.length, 1)) * Math.PI * 2 + ((seed % 100) / 100) * 0.6;
         const lr = centroid.r * (0.25 + 0.75 * ((Math.abs(seed) % 1000) / 1000));
         wx = centroid.cx + Math.cos(la) * lr;
@@ -474,8 +480,6 @@ function NetworkConstellation({
         node,
         wx,
         wy,
-        prepared: prepareWithSegments(text, FONT_SMALL),
-        preparedHeight: prepare(text, FONT_SMALL),
         color,
         // When clustering / venn, the dot is tinted by its group color so the
         // grouping reads at a glance; otherwise it keeps the heat gradient.
@@ -560,8 +564,21 @@ function NetworkConstellation({
     groupLabelFn,
   ]);
 
+  // Reuse the frame buffers until the node count changes instead of allocating
+  // three graph-sized typed arrays on every animation frame.
+  const frameBuffers = useMemo(
+    () => ({
+      screenX: new Float32Array(preparedNodes.length),
+      screenY: new Float32Array(preparedNodes.length),
+      visible: new Uint8Array(preparedNodes.length),
+    }),
+    [preparedNodes.length]
+  );
+
   // ----- Animation loop -----
   const animate = useCallback(() => {
+    animRef.current = 0;
+    if (document.hidden) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -569,12 +586,22 @@ function NetworkConstellation({
 
     const s = stateRef.current;
 
+    // Snap the final subpixel remainder so paused views can become truly idle.
+    const cameraMoving =
+      Math.abs(s.panX - s.targetPanX) > 0.1 ||
+      Math.abs(s.panY - s.targetPanY) > 0.1 ||
+      Math.abs(s.zoom - s.targetZoom) > 0.0001;
+    if (!cameraMoving) {
+      s.panX = s.targetPanX;
+      s.panY = s.targetPanY;
+      s.zoom = s.targetZoom;
+    }
     // Smooth interpolation
     s.panX = lerp(s.panX, s.targetPanX, 0.12);
     s.panY = lerp(s.panY, s.targetPanY, 0.12);
     s.zoom = lerp(s.zoom, s.targetZoom, 0.12);
 
-    const { W, H, dpr, zoom, panX, panY, mouseX, mouseY, hoverIndex } = s;
+    const { W, H, dpr, zoom, panX, panY, mouseX, mouseY } = s;
     const cx = W / 2 + panX;
     const cy = H / 2 + panY;
     const margin = 60;
@@ -602,9 +629,7 @@ function NetworkConstellation({
 
     // Screen positions (with a slow per-node ambient drift baked in, so links —
     // which read straight from screenX/screenY below — follow for free).
-    const screenX = new Float32Array(preparedNodes.length);
-    const screenY = new Float32Array(preparedNodes.length);
-    const visible = new Uint8Array(preparedNodes.length);
+    const { screenX, screenY, visible } = frameBuffers;
 
     for (let i = 0; i < preparedNodes.length; i++) {
       const n = preparedNodes[i];
@@ -634,10 +659,22 @@ function NetworkConstellation({
       s.hoverIndex = bestIdx;
     }
 
+    // Use this frame's hit test immediately (previously highlighting lagged one
+    // frame behind the pointer). Derive neighbors from just the hovered edges.
+    const hoverIndex = s.hoverIndex;
+    if (!s.isDragging && hoverIndex !== s.prevHoverIndex) {
+      canvas.style.cursor = hoverIndex >= 0 ? "pointer" : "default";
+      updateTooltipRef.current(mouseX, mouseY);
+    }
     const hoveredLinks = new Set<number>();
+    const hoveredNeighbors = new Set<number>();
     if (hoverIndex >= 0) {
       const myLinks = linksByNode.get(hoverIndex) || [];
-      for (const li of myLinks) hoveredLinks.add(li);
+      for (const li of myLinks) {
+        hoveredLinks.add(li);
+        hoveredNeighbors.add(linksWithIndices[li].a);
+        hoveredNeighbors.add(linksWithIndices[li].b);
+      }
     }
 
     // --- Draw links ---
@@ -859,9 +896,7 @@ function NetworkConstellation({
       visibleCount++;
 
       const isHovered = i === hoverIndex;
-      const isNeighbor =
-        hoveredLinks.size > 0 &&
-        (linksByNode.get(i) || []).some((li: number) => hoveredLinks.has(li));
+      const isNeighbor = hoveredNeighbors.has(i);
 
       // Size varies slightly by link count — subtle range like star magnitudes.
       // When nodeSizeFn is provided (e.g. entities view), it overrides linkCount
@@ -1036,8 +1071,26 @@ function NetworkConstellation({
 
     ctx.restore();
 
-    animRef.current = requestAnimationFrame(animate);
-  }, [isDark, preparedNodes, linksWithIndices, linksByNode, clusters, t]);
+    // Paused graphs redraw only for input/data/resize, while camera easing still
+    // completes. Ambient motion keeps its existing appearance and cadence.
+    if ((motionRef.current && preparedNodes.length > 0) || cameraMoving) {
+      requestDrawRef.current();
+    }
+  }, [
+    isDark,
+    preparedNodes,
+    linksWithIndices,
+    linksByNode,
+    clusters,
+    t,
+    frameBuffers,
+    nodeSizeFn,
+    nodeGroupsFn,
+    compactLabels,
+    heatLegendLabel,
+    heatLegendEndpoints,
+    sizeLegendLabel,
+  ]);
 
   // ----- Label drawing helper -----
   function drawLabel(
@@ -1056,7 +1109,13 @@ function NetworkConstellation({
       // Card mode
       const cardW = Math.min(220, 80 + zoom * 25);
       const textW = cardW - 16;
-      const { lines } = layoutWithLines(n.prepared, textW, 15);
+      // Most nodes never show a card. Prepare text lazily, and retain only the
+      // latest width so ambient frames reuse wrapping without an unbounded cache.
+      n.prepared ??= prepareWithSegments(n.node.label || n.node.id.substring(0, 12), FONT_SMALL);
+      if (n.labelLayout?.width !== textW) {
+        n.labelLayout = { width: textW, lines: layoutWithLines(n.prepared, textW, 15).lines };
+      }
+      const { lines } = n.labelLayout;
       const maxLines = isHovered
         ? Math.min(lines.length, 5)
         : Math.min(lines.length, Math.floor(zoom));
@@ -1115,6 +1174,12 @@ function NetworkConstellation({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    const requestDraw = () => {
+      if (!document.hidden && animRef.current === 0) {
+        animRef.current = requestAnimationFrame(animate);
+      }
+    };
+    requestDrawRef.current = requestDraw;
     const resize = () => {
       const dpr = window.devicePixelRatio || 1;
       const rect = canvas.getBoundingClientRect();
@@ -1125,12 +1190,14 @@ function NetworkConstellation({
       stateRef.current.dpr = dpr;
       stateRef.current.W = W;
       stateRef.current.H = H;
+      requestDraw();
     };
 
     resize();
 
     // Auto-fit zoom based on node spread
-    if (preparedNodes.length > 0) {
+    if (preparedNodes.length > 0 && fittedNodesRef.current !== preparedNodes) {
+      fittedNodesRef.current = preparedNodes;
       let maxR = 0;
       for (const n of preparedNodes) {
         const d = Math.sqrt(n.wx * n.wx + n.wy * n.wy);
@@ -1145,13 +1212,14 @@ function NetworkConstellation({
       stateRef.current.targetZoom = fitZoom;
     }
 
-    animRef.current = requestAnimationFrame(animate);
+    requestDraw();
 
     // Events
     const handleResize = () => resize();
 
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
+      requestDraw();
       const factor = e.deltaY > 0 ? 0.9 : 1.1;
       stateRef.current.targetZoom = Math.max(
         0.03,
@@ -1279,7 +1347,10 @@ function NetworkConstellation({
       tip.style.top = `${Math.max(4, ty)}px`;
     };
 
+    updateTooltipRef.current = updateTooltip;
+
     const handleMouseMove = (e: MouseEvent) => {
+      requestDraw();
       const rect = canvas.getBoundingClientRect();
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
@@ -1300,6 +1371,7 @@ function NetworkConstellation({
     };
 
     const handleMouseDown = (e: MouseEvent) => {
+      requestDraw();
       stateRef.current.isDragging = true;
       stateRef.current.dragStartX = e.clientX;
       stateRef.current.dragStartY = e.clientY;
@@ -1308,6 +1380,7 @@ function NetworkConstellation({
     };
 
     const handleMouseUp = () => {
+      requestDraw();
       // If we didn't drag far, treat as click
       if (stateRef.current.isDragging) {
         const dx = Math.abs(stateRef.current.panX - stateRef.current.panStartX);
@@ -1322,6 +1395,7 @@ function NetworkConstellation({
     };
 
     const handleMouseLeave = () => {
+      requestDraw();
       stateRef.current.mouseX = -1;
       stateRef.current.mouseY = -1;
       stateRef.current.isDragging = false;
@@ -1329,6 +1403,14 @@ function NetworkConstellation({
       if (tooltipRef.current) tooltipRef.current.style.display = "none";
     };
 
+    const handleVisibility = () => {
+      // Do not advance ambient time across a hidden tab or leave a pending loop.
+      cancelAnimationFrame(animRef.current);
+      animRef.current = 0;
+      clockRef.current.lastFrameMs = 0;
+      requestDraw();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
     window.addEventListener("resize", handleResize);
     canvas.addEventListener("wheel", handleWheel, { passive: false });
     canvas.addEventListener("mousemove", handleMouseMove);
@@ -1345,6 +1427,10 @@ function NetworkConstellation({
 
     return () => {
       cancelAnimationFrame(animRef.current);
+      animRef.current = 0;
+      requestDrawRef.current = () => {};
+      updateTooltipRef.current = () => {};
+      document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener("resize", handleResize);
       ro?.disconnect();
       canvas.removeEventListener("wheel", handleWheel);
@@ -1353,7 +1439,7 @@ function NetworkConstellation({
       canvas.removeEventListener("mouseup", handleMouseUp);
       canvas.removeEventListener("mouseleave", handleMouseLeave);
     };
-  }, [animate, preparedNodes, onNodeClick, isFullscreen]);
+  }, [animate, preparedNodes, onNodeClick, isFullscreen, nodeGroupsFn]);
 
   const toggleFullscreen = useCallback(() => {
     setIsFullscreen((prev) => !prev);
@@ -1381,6 +1467,7 @@ function NetworkConstellation({
       stateRef.current.dpr = dpr;
       stateRef.current.W = rect.width;
       stateRef.current.H = rect.height;
+      requestDrawRef.current();
     }, 50);
     return () => clearTimeout(timer);
   }, [isFullscreen]);
