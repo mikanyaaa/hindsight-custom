@@ -10,7 +10,14 @@ import { DataView } from "@/components/data-view";
 import { DocumentsView } from "@/components/documents-view";
 import { EntitiesView } from "@/components/entities-view";
 import { KnowledgeBaseView } from "@/components/knowledge-base-view";
-import { HomeView } from "@/components/home-view";
+// CUSTOM-HOOK: home-warm-panels-entry begin
+import { HomeView as UpstreamHomeView } from "@/components/home-view";
+import { withHomePanels } from "@/custom/home/view";
+const HomeView =
+  process.env.NEXT_PUBLIC_HINDSIGHT_THEME_WARM_GLASS === "true"
+    ? withHomePanels(UpstreamHomeView)
+    : UpstreamHomeView;
+// CUSTOM-HOOK: home-warm-panels-entry end
 import { ThinkView } from "@/components/think-view";
 import { SearchDebugView } from "@/components/search-debug-view";
 import { BankProfileView } from "@/components/bank-profile-view";

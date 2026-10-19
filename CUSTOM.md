@@ -25,6 +25,22 @@ All changes go through pull requests against `main` (ChatGPT/Codex, Grok Bot, Cu
 ## Shared-file change register (CUSTOM-HOOK)
 Edits to upstream-owned files are marked in-place with a `CUSTOM-HOOK <id>` comment so they are easy to find (`rg CUSTOM-HOOK`) and re-apply after an upstream sync.
 
+### Optional modular home (PR C)
+
+Only `NEXT_PUBLIC_HINDSIGHT_THEME_WARM_GLASS=true` at build time enables the custom
+home wrapper. Every other value directly selects upstream HomeView. Its data,
+translations, graph cap, actions and lifecycle are unchanged. Custom CSS loads only
+when the enabled wrapper mounts and is scoped under its own attribute. This works
+without PR A and inherits its theme when both are present. No new dependencies.
+
+| File | Marker names | Purpose |
+| --- | --- | --- |
+| `src/app/[locale]/banks/[bankId]/page.tsx` | `home-warm-panels-entry` | Exact-flag selection of custom wrapper around upstream HomeView. |
+
+The recursive registry validates paired unique `brain-` and `home-` hooks.
+Upstream sync hotspot: HomeView's panel DOM hierarchy (including its right column),
+even when no textual conflict occurs. No custom graph or API implementation.
+
 ### `ci-fork-scope` - run only secret-free CI in the mirror
 The mirror has no Actions secrets, so jobs that need LLM/embedding/cloud credentials can never pass here. They are guarded with `github.repository == 'vectorize-io/hindsight'` (i.e. they still run upstream). To re-enable a job in the mirror, add the secrets and drop the guard.
 
