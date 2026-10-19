@@ -38,6 +38,19 @@ The mirror has no Actions secrets, so jobs that need LLM/embedding/cloud credent
 
 Kept running in the mirror: `detect-changes`, `build-control-plane` (lint/typecheck/vitest/build), Docker control-plane build + smoke test, `check-unused-code`, `verify-generated-files`, `typecheck-api`, `build-*`, `check-*`, lint-helm-chart, `test-system`, and the integration unit-test jobs that need no secrets.
 
+### Sidebar accessibility (PR B)
+
+These accessibility fixes apply independently of any theme flag. Native modified
+links keep their browser behavior; ordinary navigation and chrome click/Enter/Space
+collapse behavior remain unchanged, including the upstream aside role.
+
+| File | Marker names | Purpose |
+| --- | --- | --- |
+| `src/components/sidebar.tsx` | `sidebar-link-state` | Accessible names for icon links and current-page state. |
+| `src/components/sidebar.tsx` | `sidebar-native-modifiers` | Preserve Shift/Alt link behavior alongside upstream Ctrl/Meta handling. |
+
+The recursive registry validates paired unique `brain-` and `sidebar-` hooks.
+
 ### Optional brain layout (step 2)
 
 Source: PR #1, `docs/plan-amendments` at `295c29f59ec6fe04a5a82883d682dc7633858ef2`,

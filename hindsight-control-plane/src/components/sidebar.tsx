@@ -102,12 +102,19 @@ export function Sidebar({ currentTab, onTabChange }: SidebarProps) {
               <li key={item.id}>
                 <Link
                   href={href}
+                  // CUSTOM-HOOK: sidebar-link-state begin
+                  aria-label={item.label}
+                  aria-current={isActive ? "page" : undefined}
+                  // CUSTOM-HOOK: sidebar-link-state end
                   onClick={(e) => {
                     // Don't bubble — clicking an item navigates, it doesn't
                     // toggle the sidebar.
                     e.stopPropagation();
                     // For left-click, prevent default and use the callback
                     // This allows the parent to handle navigation without full page reload
+                    // CUSTOM-HOOK: sidebar-native-modifiers begin
+                    if (e.shiftKey || e.altKey) return;
+                    // CUSTOM-HOOK: sidebar-native-modifiers end
                     if (e.button === 0 && !e.ctrlKey && !e.metaKey) {
                       e.preventDefault();
                       onTabChange(item.id);
