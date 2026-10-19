@@ -8,8 +8,8 @@ function checkHooks(sources: Record<string, string>, register: string) {
   for (const [file, source] of Object.entries(sources)) {
     const stack: string[] = [];
     for (const occurrence of source.matchAll(/CUSTOM-HOOK\b([^\r\n]*)/g)) {
-      const marker = occurrence[1].match(/^:\s+(brain-[a-z0-9-]+)\s+(begin|end)(?=\s|$)/);
-      if (!marker) throw new Error(`Malformed or non-brain marker in ${file}`);
+      const marker = occurrence[1].match(/^:\s+([a-z]+-[a-z0-9-]+)\s+(begin|end)(?=\s|$)/);
+      if (!marker) throw new Error(`Malformed or unsupported marker in ${file}`);
       const [, name, phase] = marker;
       if (phase === "begin") {
         if (hooks.has(name)) throw new Error(`Duplicate hook ${name}`);
@@ -27,7 +27,7 @@ function checkHooks(sources: Record<string, string>, register: string) {
     const names = [...columns[2].matchAll(/`([^`]+)`/g)].map((match) => match[1]);
     if (!names.length) throw new Error(`Missing hook names in register for ${file}`);
     for (const name of names) {
-      if (!name.startsWith("brain-")) throw new Error(`Non-brain registry entry ${name}`);
+      if (!/^[a-z]+-[a-z0-9-]+$/.test(name)) throw new Error(`Unsupported registry entry ${name}`);
       if (registered.has(name)) throw new Error(`Duplicate registry entry ${name}`);
       registered.set(name, file);
     }
@@ -64,6 +64,14 @@ describe("CUSTOM.md source hook contract", () => {
   });
   it("accepts valid paired hooks", () => {
     expect(checkHooks({ "src/example.ts": pair }, row).size).toBe(1);
+  });
+  it("accepts another explicitly registered namespace", () => {
+    expect(
+      checkHooks(
+        { "src/example.ts": pair.replaceAll("brain-example", "theme-example") },
+        row.replaceAll("brain-example", "theme-example")
+      ).size
+    ).toBe(1);
   });
   it.each([
     pair.replaceAll("brain-example", "unprefixed"),

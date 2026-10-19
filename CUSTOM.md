@@ -54,7 +54,7 @@ Flag off selects the existing component directly, ignores a supplied custom rend
 preserves request limits and does not load the lazy controls/styles/messages.
 
 The table below is the **source of truth** for all brain source hooks; the plan
-links here instead of maintaining a second directory. Every marker in `src/` must
+links here instead of maintaining a second directory. Every Brain marker in `src/` must
 use a unique `brain-` name with paired begin/end comments, and every registered
 name must exist in the listed source file. The recursive hook-registry test
 rejects unregistered, malformed, unpaired and orphaned entries.
@@ -90,3 +90,20 @@ are omitted. No minimum point spacing is promised.
 Step 3 still owns full touch/pinch controls, stale-response/bank-reset hardening and device
 performance acceptance. This step adds no ambient animation, including under reduced-motion.
 No deployment, global theme, HomeView or personality/projects view.
+
+## Optional warm glass theme (PR A)
+
+Enable only with `NEXT_PUBLIC_HINDSIGHT_THEME_WARM_GLASS=true` at build time.
+Every other value means off. Custom styles, lifecycle and asset live in
+`src/custom/theme/`. The existing globals, UI primitives, page wrappers and graph
+renderers are untouched. The single root hook dynamically loads the opt-in layer;
+its effect imports scoped CSS after globals and only then sets the root attribute.
+The local wallpaper loads after an idle callback, never from critical CSS.
+
+| File | Marker names | Purpose |
+| --- | --- | --- |
+| `src/app/layout.tsx` | `theme-warm-glass-entry` | Exact build-time flag; lazy custom layer, otherwise unchanged children. |
+
+The recursive registry accepts registered `brain-` and `theme-` namespaces, with
+unique paired markers and exact file matching. See
+[theme plan](docs/plans/warm-glass-theme.md) for sync and acceptance criteria.

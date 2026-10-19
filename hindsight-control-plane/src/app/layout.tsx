@@ -16,5 +16,10 @@ export default function RootLayout({
 }>) {
   // The root layout is a minimal shell. Locale-aware content,
   // providers, and <html lang> are handled in [locale]/layout.tsx.
+  // CUSTOM-HOOK: theme-warm-glass-entry begin
+  if (process.env.NEXT_PUBLIC_HINDSIGHT_THEME_WARM_GLASS === "true") {
+    return import("@/custom/theme/layer").then(({ default: Layer }) => <Layer>{children}</Layer>);
+  }
+  // CUSTOM-HOOK: theme-warm-glass-entry end
   return children;
 }

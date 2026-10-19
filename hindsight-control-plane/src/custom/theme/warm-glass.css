@@ -1,0 +1,110 @@
+/* Every rule is rooted here; chart/data colors and graph canvases stay upstream. */
+[data-theme-layer="warm-glass"] {
+  --background: #f3ede6;
+  --foreground: #302b29;
+  --card: #fff8f0;
+  --card-foreground: #302b29;
+  --popover: #fff8f0;
+  --popover-foreground: #302b29;
+  --muted: #e8ded5;
+  --muted-foreground: #59504a;
+  --accent: #e6d7eb;
+  --accent-foreground: #302b29;
+  --primary: #71427e;
+  --primary-foreground: #ffffff;
+  --border: #a89a90;
+  --input: #a89a90;
+  --ring: #71427e;
+  --warm-panel: rgb(255 248 240 / 88%);
+  --warm-rim: rgb(255 255 255 / 75%);
+}
+[data-theme-layer="warm-glass"].dark {
+  --background: #302b29;
+  --foreground: #fff8f0;
+  --card: #38302d;
+  --card-foreground: #fff8f0;
+  --popover: #38302d;
+  --popover-foreground: #fff8f0;
+  --muted: #4d423d;
+  --muted-foreground: #e3d8d0;
+  --accent: #59465f;
+  --accent-foreground: #fff8f0;
+  --primary: #edc8fa;
+  --primary-foreground: #302b29;
+  --border: #82726a;
+  --input: #82726a;
+  --ring: #edc8fa;
+  --warm-panel: rgb(56 48 45 / 88%);
+  --warm-rim: rgb(255 248 240 / 25%);
+}
+[data-theme-layer="warm-glass"] body {
+  background: var(--background) var(--warm-city, none) center / cover fixed;
+}
+[data-theme-layer="warm-glass"] .h-screen:has(> .shrink-0 + .flex > aside) {
+  background: transparent;
+  padding: 16px;
+  gap: 16px;
+}
+[data-theme-layer="warm-glass"] .border-primary-gradient {
+  border: 1px solid var(--warm-rim);
+  border-radius: 28px;
+  background: var(--warm-panel);
+  box-shadow: inset 0 1px var(--warm-rim), 0 12px 40px #21182726;
+}
+[data-theme-layer="warm-glass"] aside {
+  margin-right: 16px;
+  border: 1px solid var(--warm-rim);
+  border-radius: 28px;
+  background: var(--warm-panel);
+  box-shadow: inset 0 1px var(--warm-rim), 0 12px 40px #21182726;
+}
+/* Blur only chrome without fixed descendants; never filter main or graph parents. */
+[data-theme-layer="warm-glass"] :is(aside, .border-primary-gradient) {
+  -webkit-backdrop-filter: blur(20px) saturate(125%);
+  backdrop-filter: blur(20px) saturate(125%);
+}
+[data-theme-layer="warm-glass"] main {
+  position: relative;
+  border: 1px solid var(--warm-rim);
+  border-radius: 28px;
+  background: var(--warm-panel);
+}
+/* A decorative sibling blurs the backdrop without trapping fixed graph descendants. */
+[data-theme-layer="warm-glass"] main::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  -webkit-backdrop-filter: blur(18px) saturate(120%);
+  backdrop-filter: blur(18px) saturate(120%);
+}
+[data-theme-layer="warm-glass"] main > .p-6 { position: relative; z-index: 1; }
+[data-theme-layer="warm-glass"] aside a { border-radius: 999px; }
+[data-theme-layer="warm-glass"] .bg-primary-gradient {
+  background: linear-gradient(115deg, #f7d5a9, #efc0e5, #c6b7fa);
+  color: #302b29;
+}
+[data-theme-layer="warm-glass"] :is(input, textarea, [role="dialog"], [role="menu"], [data-radix-popper-content-wrapper]) {
+  --warm-panel: var(--card);
+}
+[data-theme-layer="warm-glass"] :focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+@media (max-width: 767px) {
+  [data-theme-layer="warm-glass"] .h-screen:has(> .shrink-0 + .flex > aside) { padding: 8px; gap: 8px; }
+  [data-theme-layer="warm-glass"] aside { margin-right: 8px; border-radius: 20px; flex-shrink: 0; }
+  [data-theme-layer="warm-glass"] main { border-radius: 20px; }
+  [data-theme-layer="warm-glass"] main > .p-6 { padding: 12px; }
+  [data-theme-layer="warm-glass"] .border-primary-gradient { padding: 10px; }
+  [data-theme-layer="warm-glass"] .border-primary-gradient > .flex { flex-wrap: wrap; gap: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-theme-layer="warm-glass"] :is(aside, aside a, .border-primary-gradient) { transition: none; animation: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  [data-theme-layer="warm-glass"], [data-theme-layer="warm-glass"].dark { --warm-panel: var(--card); }
+  [data-theme-layer="warm-glass"] main::before { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  [data-theme-layer="warm-glass"] :is(aside, .border-primary-gradient) { -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  [data-theme-layer="warm-glass"], [data-theme-layer="warm-glass"].dark { --warm-panel: var(--card); }
+}
