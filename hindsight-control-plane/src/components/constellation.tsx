@@ -283,6 +283,7 @@ function NetworkConstellation({
   const tooltipRef = useRef<HTMLDivElement>(null);
   const isDark = useIsDarkMode();
   const animRef = useRef<number>(0);
+  const ambientTimerRef = useRef<number>(0);
   const requestDrawRef = useRef<() => void>(() => {});
   const updateTooltipRef = useRef<(x: number, y: number) => void>(() => {});
   const fittedNodesRef = useRef<PreparedNode[] | null>(null);
@@ -575,6 +576,17 @@ function NetworkConstellation({
     [preparedNodes.length]
   );
 
+  // Link indices grouped by stroke color, so idle links render in a few batched paths.
+  const linkColorGroups = useMemo(() => {
+    const groups = new Map<string, number[]>();
+    linksWithIndices.forEach((l, i) => {
+      const arr = groups.get(l.color);
+      if (arr) arr.push(i);
+      else groups.set(l.color, [i]);
+    });
+    return groups;
+  }, [linksWithIndices]);
+
   // ----- Animation loop -----
   const animate = useCallback(() => {
     animRef.current = 0;
@@ -735,7 +747,15 @@ function NetworkConstellation({
       const baseAlpha = (0.06 + Math.min(zoom * 0.04, 0.1)) * shimmer;
       ctx.lineWidth = 0.4;
 
-      for (const link of linksWithIndices) {
+      ctx.globalAlpha = baseAlpha;
+      // Batch by color: one beginPath/stroke per link color instead of per link
+      // (16k+ separate strokes per frame was the dominant cost on large banks).
+      for (const [color, idxs] of linkColorGroups) {
+        if (linksDrawn >= maxLinks) break;
+        ctx.strokeStyle = color;
+        ctx.beginPath();
+      for (const li of idxs) {
+        const link = linksWithIndices[li];
         if (linksDrawn >= maxLinks) break;
         const ax = screenX[link.a];
         const ay = screenY[link.a];
@@ -750,16 +770,13 @@ function NetworkConstellation({
         )
           continue;
 
-        ctx.strokeStyle = link.color;
-        ctx.globalAlpha = baseAlpha;
-
         const midX = (ax + bx) / 2 + (by - ay) * 0.08;
         const midY = (ay + by) / 2 - (bx - ax) * 0.08;
-        ctx.beginPath();
         ctx.moveTo(ax, ay);
         ctx.quadraticCurveTo(midX, midY, bx, by);
-        ctx.stroke();
         linksDrawn++;
+      }
+        ctx.stroke();
       }
       ctx.globalAlpha = 1;
     }
@@ -1023,10 +1040,10 @@ function NetworkConstellation({
       const heatLoW = ctx.measureText(heatLo).width;
       const heatHiW = ctx.measureText(heatHi).width;
       const gradW = Math.max(80, heatLoW + heatHiW + 12);
-      for (let gx = 0; gx < gradW; gx++) {
-        ctx.fillStyle = heatColor(gx / gradW);
-        ctx.fillRect(12 + gx, 42, 1, 6);
-      }
+      const grad = ctx.createLinearGradient(12, 0, 12 + gradW, 0);
+      for (let k = 0; k <= 8; k++) grad.addColorStop(k / 8, heatColor(k / 8));
+      ctx.fillStyle = grad;
+      ctx.fillRect(12, 42, gradW, 6);
       ctx.fillStyle = isDark ? "#a1a1aa" : "#71717a";
       ctx.fillText(heatLo, 12, 60);
       ctx.textAlign = "right";
@@ -1073,8 +1090,11 @@ function NetworkConstellation({
 
     // Paused graphs redraw only for input/data/resize, while camera easing still
     // completes. Ambient motion keeps its existing appearance and cadence.
-    if ((motionRef.current && preparedNodes.length > 0) || cameraMoving) {
+    if (cameraMoving || s.isDragging) {
       requestDrawRef.current();
+    } else if (motionRef.current && preparedNodes.length > 0) {
+      // Slow ambient drift doesn't need 60-120fps; halve the cost while idle.
+      ambientTimerRef.current = window.setTimeout(() => requestDrawRef.current(), 33);
     }
   }, [
     isDark,
@@ -1084,6 +1104,7 @@ function NetworkConstellation({
     clusters,
     t,
     frameBuffers,
+    linkColorGroups,
     nodeSizeFn,
     nodeGroupsFn,
     compactLabels,
@@ -1176,12 +1197,13 @@ function NetworkConstellation({
 
     const requestDraw = () => {
       if (!document.hidden && animRef.current === 0) {
+        clearTimeout(ambientTimerRef.current);
         animRef.current = requestAnimationFrame(animate);
       }
     };
     requestDrawRef.current = requestDraw;
     const resize = () => {
-      const dpr = window.devicePixelRatio || 1;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const rect = canvas.getBoundingClientRect();
       const W = rect.width;
       const H = rect.height;
@@ -1427,6 +1449,7 @@ function NetworkConstellation({
 
     return () => {
       cancelAnimationFrame(animRef.current);
+      clearTimeout(ambientTimerRef.current);
       animRef.current = 0;
       requestDrawRef.current = () => {};
       updateTooltipRef.current = () => {};
@@ -1460,7 +1483,7 @@ function NetworkConstellation({
     if (!canvasRef.current) return;
     // Small delay to let the DOM update
     const timer = setTimeout(() => {
-      const dpr = window.devicePixelRatio || 1;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const rect = canvasRef.current!.getBoundingClientRect();
       canvasRef.current!.width = rect.width * dpr;
       canvasRef.current!.height = rect.height * dpr;
