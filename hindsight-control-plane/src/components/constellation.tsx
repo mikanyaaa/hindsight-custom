@@ -35,6 +35,11 @@ interface PreparedNode {
 
 /** Ambient-motion preference, shared by every constellation (not per bank). */
 const MOTION_STORAGE_KEY = "constellation-motion";
+// Idle-link budget: strongest edges per node, then a global cap.
+const AMBIENT_LINKS_PER_NODE = 8;
+const AMBIENT_LINK_CAP = 1500;
+// Above this many edges ambient motion starts paused (user toggle still works).
+const MOTION_AUTO_OFF_LINKS = 2000;
 
 // ============================================================================
 // Props
@@ -297,13 +302,19 @@ function NetworkConstellation({
   // pausing freezes the field in place and resuming continues without a jump.
   const clockRef = useRef({ seconds: 0, lastFrameMs: 0 });
 
+  const largeGraph = data.links.length > MOTION_AUTO_OFF_LINKS;
   useEffect(() => {
+    // An explicit user choice wins; otherwise start paused for large graphs or
+    // when the OS asks for reduced motion.
     const saved = localStorage.getItem(MOTION_STORAGE_KEY);
-    if (saved === "off") {
-      setMotionEnabled(false);
-      motionRef.current = false;
-    }
-  }, []);
+    const reduced =
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const on = saved === "on" ? true : saved === "off" ? false : !(reduced || largeGraph);
+    setMotionEnabled(on);
+    motionRef.current = on;
+    requestDrawRef.current();
+  }, [largeGraph]);
 
   const toggleMotion = useCallback(() => {
     setMotionEnabled((prev) => {
@@ -522,6 +533,7 @@ function NetworkConstellation({
       b: number;
       color: string;
       type: string;
+      weight: number;
     }> = [];
     const byNode = new Map<number, number[]>();
 
@@ -538,7 +550,13 @@ function NetworkConstellation({
         DEFAULT_NODE_COLOR;
 
       const idx = linksIdx.length;
-      linksIdx.push({ a: ai, b: bi, color, type: link.type || "semantic" });
+      linksIdx.push({
+        a: ai,
+        b: bi,
+        color,
+        type: link.type || "semantic",
+        weight: link.weight ?? 0,
+      });
 
       if (!byNode.has(ai)) byNode.set(ai, []);
       if (!byNode.has(bi)) byNode.set(bi, []);
@@ -576,16 +594,33 @@ function NetworkConstellation({
     [preparedNodes.length]
   );
 
-  // Link indices grouped by stroke color, so idle links render in a few batched paths.
-  const linkColorGroups = useMemo(() => {
+  // Idle (non-hover) links: keep each node's strongest AMBIENT_LINKS_PER_NODE
+  // edges, rank the survivors by weight, cap at AMBIENT_LINK_CAP, and group by
+  // stroke color so they render in a few batched paths. Hover still shows every
+  // link of the hovered node (linksByNode is untouched).
+  const { linkColorGroups, linkRank } = useMemo(() => {
+    const keep = new Uint8Array(linksWithIndices.length);
+    for (const idxs of linksByNode.values() as Iterable<number[]>) {
+      const top = [...idxs]
+        .sort((x, y) => linksWithIndices[y].weight - linksWithIndices[x].weight)
+        .slice(0, AMBIENT_LINKS_PER_NODE);
+      for (const li of top) keep[li] = 1;
+    }
+    const ranked: number[] = [];
+    for (let i = 0; i < keep.length; i++) if (keep[i]) ranked.push(i);
+    ranked.sort((x, y) => linksWithIndices[y].weight - linksWithIndices[x].weight);
+    ranked.length = Math.min(ranked.length, AMBIENT_LINK_CAP);
+    const rank = new Int32Array(linksWithIndices.length).fill(-1);
     const groups = new Map<string, number[]>();
-    linksWithIndices.forEach((l, i) => {
-      const arr = groups.get(l.color);
-      if (arr) arr.push(i);
-      else groups.set(l.color, [i]);
+    ranked.forEach((li, r) => {
+      rank[li] = r;
+      const color = linksWithIndices[li].color;
+      const arr = groups.get(color);
+      if (arr) arr.push(li);
+      else groups.set(color, [li]);
     });
-    return groups;
-  }, [linksWithIndices]);
+    return { linkColorGroups: groups, linkRank: rank };
+  }, [linksWithIndices, linksByNode]);
 
   // ----- Animation loop -----
   const animate = useCallback(() => {
@@ -690,7 +725,9 @@ function NetworkConstellation({
     }
 
     // --- Draw links ---
-    const maxLinks = 6000;
+    // Thin the idle web when zoomed far out: only the strongest links survive.
+    const maxLinks =
+      zoom < 0.2 ? AMBIENT_LINK_CAP / 4 : zoom < 0.4 ? AMBIENT_LINK_CAP / 2 : AMBIENT_LINK_CAP;
     let linksDrawn = 0;
 
     if (hoverIndex >= 0) {
@@ -751,31 +788,30 @@ function NetworkConstellation({
       // Batch by color: one beginPath/stroke per link color instead of per link
       // (16k+ separate strokes per frame was the dominant cost on large banks).
       for (const [color, idxs] of linkColorGroups) {
-        if (linksDrawn >= maxLinks) break;
         ctx.strokeStyle = color;
         ctx.beginPath();
-      for (const li of idxs) {
-        const link = linksWithIndices[li];
-        if (linksDrawn >= maxLinks) break;
-        const ax = screenX[link.a];
-        const ay = screenY[link.a];
-        const bx = screenX[link.b];
-        const by = screenY[link.b];
+        for (const li of idxs) {
+          if (linkRank[li] >= maxLinks) continue;
+          const link = linksWithIndices[li];
+          const ax = screenX[link.a];
+          const ay = screenY[link.a];
+          const bx = screenX[link.b];
+          const by = screenY[link.b];
 
-        if (
-          (ax < -margin && bx < -margin) ||
-          (ax > W + margin && bx > W + margin) ||
-          (ay < -margin && by < -margin) ||
-          (ay > H + margin && by > H + margin)
-        )
-          continue;
+          if (
+            (ax < -margin && bx < -margin) ||
+            (ax > W + margin && bx > W + margin) ||
+            (ay < -margin && by < -margin) ||
+            (ay > H + margin && by > H + margin)
+          )
+            continue;
 
-        const midX = (ax + bx) / 2 + (by - ay) * 0.08;
-        const midY = (ay + by) / 2 - (bx - ax) * 0.08;
-        ctx.moveTo(ax, ay);
-        ctx.quadraticCurveTo(midX, midY, bx, by);
-        linksDrawn++;
-      }
+          const midX = (ax + bx) / 2 + (by - ay) * 0.08;
+          const midY = (ay + by) / 2 - (bx - ax) * 0.08;
+          ctx.moveTo(ax, ay);
+          ctx.quadraticCurveTo(midX, midY, bx, by);
+          linksDrawn++;
+        }
         ctx.stroke();
       }
       ctx.globalAlpha = 1;
@@ -1105,6 +1141,7 @@ function NetworkConstellation({
     t,
     frameBuffers,
     linkColorGroups,
+    linkRank,
     nodeSizeFn,
     nodeGroupsFn,
     compactLabels,
