@@ -40,7 +40,7 @@
 [data-theme-layer="warm-glass"] body {
   background: var(--background) var(--warm-city, none) center / cover fixed;
 }
-[data-theme-layer="warm-glass"] .h-screen:has(> .shrink-0 + .flex > aside) {
+[data-theme-layer="warm-glass"] .h-dvh:has(> .shrink-0 + .flex > aside) {
   background: transparent;
   padding: 16px;
   gap: 16px;
@@ -79,7 +79,10 @@
   -webkit-backdrop-filter: blur(18px) saturate(120%);
   backdrop-filter: blur(18px) saturate(120%);
 }
-[data-theme-layer="warm-glass"] main > .p-6 { position: relative; z-index: 1; }
+/* Upstream now uses p-4 sm:p-6. Position every content wrapper after ::before
+   in paint order, independent of spacing classes. Keep z-index auto: a stacking
+   context here would trap fixed fullscreen graphs below the surrounding chrome. */
+[data-theme-layer="warm-glass"] main > * { position: relative; }
 [data-theme-layer="warm-glass"] aside a { border-radius: 999px; }
 [data-theme-layer="warm-glass"] .bg-primary-gradient {
   background: linear-gradient(115deg, #f7d5a9, #efc0e5, #c6b7fa);
@@ -90,10 +93,10 @@
 }
 [data-theme-layer="warm-glass"] :focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
 @media (max-width: 767px) {
-  [data-theme-layer="warm-glass"] .h-screen:has(> .shrink-0 + .flex > aside) { padding: 8px; gap: 8px; }
+  [data-theme-layer="warm-glass"] .h-dvh:has(> .shrink-0 + .flex > aside) { padding: 8px; gap: 8px; }
   [data-theme-layer="warm-glass"] aside { margin-right: 8px; border-radius: 20px; flex-shrink: 0; }
   [data-theme-layer="warm-glass"] main { border-radius: 20px; }
-  [data-theme-layer="warm-glass"] main > .p-6 { padding: 12px; }
+  [data-theme-layer="warm-glass"] main > * { padding: 12px; }
   [data-theme-layer="warm-glass"] .border-primary-gradient { padding: 10px; }
   [data-theme-layer="warm-glass"] .border-primary-gradient > .flex { flex-wrap: wrap; gap: 8px; }
 }

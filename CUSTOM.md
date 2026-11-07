@@ -156,6 +156,14 @@ renderers are untouched. The single root hook dynamically loads the opt-in layer
 its effect imports scoped CSS after globals and only then sets the root attribute.
 The local wallpaper loads after an idle callback, never from critical CSS.
 
+Upstream sync hotspot: the bank shell uses `h-dvh` and responsive content padding.
+The main blur is a decorative `::before`; all direct content wrappers are positioned
+after it in paint order, without a z-index/stacking context that would trap fixed
+fullscreen graphs. Do not couple that rule to a Tailwind padding class. The Vitest
+regression reads the current page wrapper. With Playwright available, run
+`node tests/custom/theme/layering-browser.cjs` from `hindsight-control-plane/` for
+pixel checks in light/dark at 390/768/1440px plus dialog/fullscreen checks.
+
 | File | Marker names | Purpose |
 | --- | --- | --- |
 | `src/app/layout.tsx` | `theme-warm-glass-entry` | Exact build-time flag; lazy custom layer, otherwise unchanged children. |

@@ -50,6 +50,31 @@ describe("opt-in theme", () => {
 });
 
 const css = readFileSync("src/custom/theme/warm-glass.css", "utf8");
+it("positions the current upstream content wrapper above the blur without trapping fullscreen", () => {
+  const source = readFileSync("src/app/[locale]/banks/[bankId]/page.tsx", "utf8");
+  const [, mainClass, contentClass] = source.match(
+    /<main className="([^"]+)">\s*<div className="([^"]+)"/
+  )!;
+  const style = document.createElement("style");
+  style.textContent = css;
+  document.head.append(style);
+  document.documentElement.dataset.themeLayer = "warm-glass";
+  try {
+    const { container } = render(
+      <main className={mainClass}>
+        <div className={contentClass}>Readable settings</div>
+      </main>
+    );
+    const content = container.querySelector("main > div")!;
+    expect(getComputedStyle(content).position).toBe("relative");
+    // An explicit z-index would create a stacking context around fixed graphs.
+    expect(["", "auto"]).toContain(getComputedStyle(content).zIndex);
+    expect(["", "none"]).toContain(getComputedStyle(content).getPropertyValue("backdrop-filter"));
+  } finally {
+    style.remove();
+    delete document.documentElement.dataset.themeLayer;
+  }
+});
 const rgb = (hex: string) => hex.match(/[a-f\d]{2}/gi)!.map((x) => parseInt(x, 16));
 const luminance = (color: number[]) =>
   color
