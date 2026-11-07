@@ -13,13 +13,22 @@
 #                                     Set to false when using external providers (TEI, OpenAI, Cohere)
 #   PRELOAD_ML_MODELS=true/false   - Pre-download ML models during build (default: true)
 #                                     Only effective when INCLUDE_LOCAL_MODELS=true
+#   NEXT_PUBLIC_BASE_PATH          - Control-plane base path, inlined by next build
+#   NEXT_PUBLIC_HINDSIGHT_THEME_WARM_GLASS=true
+#                                  - Opt in to the warm-glass theme and modular home.
+#                                    Any other value, including empty, leaves both off.
+#   NEXT_PUBLIC_HINDSIGHT_BRAIN_ENABLED=true
+#                                  - Opt in to the brain memory layout. Any other value leaves it off.
+#   Preloaded local model files are a cache for the unset local defaults. They do not
+#   override HINDSIGHT_API_EMBEDDINGS_* or HINDSIGHT_API_RERANKER_* at runtime.
 #
 # Examples:
-#   docker build -t hindsight .                                          # Both (standalone)
-#   docker build -t hindsight-api --target api-only .                    # API only
-#   docker build -t hindsight-cp --target cp-only .                      # Control Plane only
-#   docker build -t hindsight --build-arg PRELOAD_ML_MODELS=false .      # Skip ML model preload
-#   docker build -t hindsight --build-arg INCLUDE_LOCAL_MODELS=false .   # Skip local ML deps (for external providers)
+#   docker build -f docker/standalone/Dockerfile -t hindsight .
+#   docker build -f docker/standalone/Dockerfile --target api-only -t hindsight-api .
+#   docker build -f docker/standalone/Dockerfile --target cp-only -t hindsight-cp .
+#   docker build -f docker/standalone/Dockerfile --target cp-only -t hindsight-cp \
+#     --build-arg NEXT_PUBLIC_HINDSIGHT_THEME_WARM_GLASS=true \
+#     --build-arg NEXT_PUBLIC_HINDSIGHT_BRAIN_ENABLED=true .
 
 ARG PRELOAD_ML_MODELS=true
 ARG INCLUDE_LOCAL_MODELS=true
@@ -102,30 +111,53 @@ RUN npm ci --ignore-scripts -w @vectorize-io/hindsight-client \
 # =============================================================================
 FROM node:24-slim AS cp-builder
 
-# Create directory structure matching the monorepo layout
-# This is required because build:standalone script expects .next/standalone/memory-poc/hindsight-control-plane
+# Mirror the monorepo layout under /app/memory-poc: next.config sets the
+# monorepo root to the control plane's parent directory.
+WORKDIR /app/memory-poc
+
+# Install from the root lockfile so the image gets exactly the pinned versions
+# and the root package.json overrides (security pins). The lockfile records the
+# linux glibc/musl native bindings for lightningcss and tailwind oxide, so
+# `npm ci` picks the right one for the build platform.
+# --ignore-scripts skips the root `prepare` git-hooks setup.
+# Previously this stage ran `npm install` on the control plane's package.json
+# alone, to get those native bindings. That re-resolved every version on each
+# build (a fresh npm release broke CI, #5785), skipped the root overrides, and
+# installed only the glibc sharp, which the alpine cp-only image can't load.
+COPY package.json package-lock.json ./
+COPY hindsight-control-plane/package.json ./hindsight-control-plane/
+# Only the SDK manifest here, so an SDK code change doesn't rerun the install.
+COPY hindsight-clients/typescript/package.json ./hindsight-clients/typescript/
+# npm skips an optional dependency it fails to download without failing the
+# install, so a network blip can leave out a platform native binding and
+# `next build` dies with "Failed to load native binding" (#5975). Load the
+# bindings the build needs and reinstall if one is missing. (next fetches its
+# own @next/swc binary when it is missing, so it isn't listed.)
+RUN for attempt in 1 2 3; do \
+      npm ci --ignore-scripts -w @vectorize-io/hindsight-control-plane \
+      && node -e 'for (const m of ["lightningcss", "@tailwindcss/oxide"]) require(m); require(require.resolve("@swc/core", { paths: ["node_modules/next-intl"] }))' \
+      && break; \
+      [ "$attempt" -lt 3 ] || exit 1; \
+      echo "native bindings missing after npm ci, retrying ($attempt)"; \
+    done
+
+# Built SDK (the workspace symlink in node_modules points here), then the
+# Control Plane source (excluding node_modules via .dockerignore)
+COPY --from=sdk-builder /app/hindsight-clients/typescript ./hindsight-clients/typescript/
+COPY hindsight-control-plane/ ./hindsight-control-plane/
+
 WORKDIR /app/memory-poc/hindsight-control-plane
 
-# Install Control Plane dependencies
-# Only copy package.json (not package-lock.json) to ensure npm installs
-# correct platform-specific native bindings for lightningcss/tailwindcss
-COPY hindsight-control-plane/package.json ./
-# Remove the file: dependency on SDK (we'll copy it directly later)
-RUN sed -i '/"@vectorize-io\/hindsight-client":/d' package.json \
-    && npm install
-
-# Copy Control Plane source (excluding node_modules via .dockerignore)
-COPY hindsight-control-plane/ ./
-# Remove package-lock.json to avoid conflicts with installed native bindings
-# Also remove the file: dependency from package.json (restored by COPY above)
-RUN rm -f package-lock.json && sed -i '/"@vectorize-io\/hindsight-client":/d' package.json
-
-# Copy built SDK directly into node_modules (more reliable than npm link in Docker)
-COPY --from=sdk-builder /app/hindsight-clients/typescript ./node_modules/@vectorize-io/hindsight-client
-
-# Accept base path as build argument for reverse proxy deployments
-# Usage: docker build --build-arg NEXT_PUBLIC_BASE_PATH=/hindsight ...
+# Next.js inlines NEXT_PUBLIC_* while compiling. An undeclared build-arg is
+# dropped, so without these ARGs a custom image always gets the flags off even
+# when the build command sets them. Only the exact string "true" enables a flag.
+# Warm glass and the modular home share the theme flag. The brain layout is separate.
 ARG NEXT_PUBLIC_BASE_PATH=""
+ARG NEXT_PUBLIC_HINDSIGHT_THEME_WARM_GLASS=""
+ARG NEXT_PUBLIC_HINDSIGHT_BRAIN_ENABLED=""
+ENV NEXT_PUBLIC_BASE_PATH=${NEXT_PUBLIC_BASE_PATH}
+ENV NEXT_PUBLIC_HINDSIGHT_THEME_WARM_GLASS=${NEXT_PUBLIC_HINDSIGHT_THEME_WARM_GLASS}
+ENV NEXT_PUBLIC_HINDSIGHT_BRAIN_ENABLED=${NEXT_PUBLIC_HINDSIGHT_BRAIN_ENABLED}
 
 # Build Control Plane - run next build first, then custom standalone copy
 # (The build:standalone script expects a specific path structure that differs in Docker)
@@ -217,7 +249,7 @@ from sentence_transformers import SentenceTransformer, CrossEncoder; \
 print('Downloading embedding model...'); \
 SentenceTransformer('BAAI/bge-small-en-v1.5'); \
 print('Downloading cross-encoder model...'); \
-CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2'); \
+CrossEncoder('hindsight-ai/hs-rerank-1'); \
 print('Models cached successfully')" && break; \
       if [ "$i" -lt "$MAX_RETRIES" ]; then \
         echo "Attempt $i failed, retrying in ${RETRY_DELAY}s..."; \
@@ -262,6 +294,9 @@ WORKDIR /app/control-plane
 COPY --from=cp-builder /app/memory-poc/hindsight-control-plane/standalone ./
 COPY --from=cp-builder /app/memory-poc/hindsight-control-plane/.next/static ./.next/static
 COPY --from=cp-builder /app/memory-poc/hindsight-control-plane/public ./public
+# next/image needs sharp, and this image is musl while cp-builder is glibc. Fail
+# the build if the bundle lacks the musl binding (it shipped without one, #5785).
+RUN node -e "require('/app/control-plane/node_modules/sharp')"
 
 WORKDIR /app
 
@@ -398,7 +433,7 @@ from sentence_transformers import SentenceTransformer, CrossEncoder; \
 print('Downloading embedding model...'); \
 SentenceTransformer('BAAI/bge-small-en-v1.5'); \
 print('Downloading cross-encoder model...'); \
-CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2'); \
+CrossEncoder('hindsight-ai/hs-rerank-1'); \
 print('Models cached successfully')" && break; \
       if [ "$i" -lt "$MAX_RETRIES" ]; then \
         echo "Attempt $i failed, retrying in ${RETRY_DELAY}s..."; \

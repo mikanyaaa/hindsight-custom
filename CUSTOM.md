@@ -10,6 +10,32 @@ This is a **public customized copy** of [vectorize-io/hindsight](https://github.
   - Dev: `npm install` at repo root, then `npm run dev -w @vectorize-io/hindsight-control-plane` (port 9999).
 - Docker: `docker/standalone/Dockerfile` (stages `cp-builder`, `cp-only`; Next.js standalone output). Compose files in `docker/docker-compose/`.
 
+## Runtime model compatibility
+
+Provider and model selection stays in the process environment. An explicit
+embedding provider, embedding model, reranker provider, or reranker model is
+used as given and is not replaced by a built-in default. Built-in defaults apply
+only when the corresponding variable is unset. The Docker image may cache the
+unset local defaults at build time; that cache does not override the environment
+at runtime. Do not switch an already configured embedding or reranker model to
+one of those defaults.
+
+The vector width default remains 384. v1.2.0 does not add an Alembic revision
+after `c7e2f9a4d1b8`, which is also the v1.1.0 head, so a database already at
+that revision gets no further schema changes from this upgrade.
+
+UI login remains the control-plane access key (`HINDSIGHT_CP_ACCESS_KEY`).
+Authenticated MCP keeps the existing order: `HINDSIGHT_API_MCP_AUTH_TOKEN` when
+set, otherwise the configured tenant extension's `authenticate_mcp`. This tree
+does not replace that extension.
+
+The control-plane image inlines its opt-in UI at `next build`. Pass these as
+Docker build args (any value other than `true` leaves the feature off):
+
+- `NEXT_PUBLIC_HINDSIGHT_THEME_WARM_GLASS` — warm glass theme and modular home
+- `NEXT_PUBLIC_HINDSIGHT_BRAIN_ENABLED` — brain memory layout
+- `NEXT_PUBLIC_BASE_PATH` — reverse-proxy base path
+
 ## Syncing with upstream
 ```bash
 git remote add upstream https://github.com/vectorize-io/hindsight.git   # once
@@ -57,8 +83,9 @@ Kept running in the mirror: `detect-changes`, `build-control-plane` (lint/typech
 ### Sidebar accessibility (PR B)
 
 These accessibility fixes apply independently of any theme flag. Native modified
-links keep their browser behavior; ordinary navigation and chrome click/Enter/Space
-collapse behavior remain unchanged, including the upstream aside role.
+links keep their browser behavior. Upstream v1.2 draws the same nav in a desktop
+rail and a phone drawer, and the keyboard toggle is the explicit button. The
+aside stays a mouse target and does not carry a button role.
 
 | File | Marker names | Purpose |
 | --- | --- | --- |

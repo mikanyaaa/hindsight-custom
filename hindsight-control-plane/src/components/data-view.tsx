@@ -3,6 +3,15 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { client } from "@/lib/api";
+import {
+  GraphParams,
+  cachedGraph,
+  fetchGraph,
+  isFresh,
+  prefetchGraph,
+  sameGraph,
+  storeGraph,
+} from "@/lib/graph-cache";
 import { useBank } from "@/lib/bank-context";
 import {
   AppliedMemoryFilters,
@@ -15,6 +24,8 @@ import { Input } from "@/components/ui/input";
 import {
   Calendar,
   ZoomIn,
+  ArrowDownWideNarrow,
+  ArrowUpNarrowWide,
   ZoomOut,
   ChevronLeft,
   ChevronRight,
@@ -63,6 +74,20 @@ import { ScatterChart, Plus, FileText } from "lucide-react";
 
 type FactType = "world" | "experience" | "observation";
 type ViewMode = "table" | "timeline" | "constellation";
+const DEFAULT_FETCH_LIMIT = 1000;
+
+// Constellation, table or timeline: kept across tabs and visits, so someone who
+// works in the table doesn't land back on the constellation every time.
+const VIEW_MODE_KEY = "hindsight.memories.viewMode";
+function readViewMode(): ViewMode {
+  try {
+    const v = localStorage.getItem(VIEW_MODE_KEY);
+    if (v === "table" || v === "timeline" || v === "constellation") return v;
+  } catch {
+    // No storage (server render, blocked): use the default.
+  }
+  return "constellation";
+}
 
 // Categorical palette for coloring observation scopes (exact tag sets) when
 // "Group by scope" clusters the constellation. Distinct, reasonably separable hues.
@@ -91,6 +116,8 @@ interface DataViewProps {
   chunkId?: string;
   compact?: boolean;
   onExpandToggle?: () => void;
+  /** Sibling tabs to warm in the background once this one has loaded. */
+  prefetchTypes?: FactType[];
 }
 
 export function DataView({
@@ -99,6 +126,7 @@ export function DataView({
   chunkId,
   compact = false,
   onExpandToggle,
+  prefetchTypes,
 }: DataViewProps) {
   const t = useTranslations("dataView");
   const tAddDoc = useTranslations("addDocument");
@@ -106,7 +134,15 @@ export function DataView({
   // CUSTOM-HOOK: brain-network-mode begin
   const brainMode = useBrainMode();
   // CUSTOM-HOOK: brain-network-mode end
-  const [viewMode, setViewMode] = useState<ViewMode>("constellation");
+  const [viewMode, setViewMode] = useState<ViewMode>(readViewMode);
+  const chooseViewMode = (mode: ViewMode) => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem(VIEW_MODE_KEY, mode);
+    } catch {
+      // Storage blocked: the choice just won't outlive this view.
+    }
+  };
   const [compactMode, setCompactMode] = useState(compact);
   // CUSTOM-HOOK: brain-network-active begin
   const brainActive =
@@ -114,7 +150,21 @@ export function DataView({
     brainMode.layoutMode === "brain" &&
     (compactMode || viewMode === "constellation");
   // CUSTOM-HOOK: brain-network-active end
-  const [data, setData] = useState<any>(null);
+  // Open on whatever this tab showed last (if anything), not on a spinner.
+  // The cache key includes the brain budget so a brain view does not reuse a
+  // full-limit payload, and a network view does not reuse a capped one.
+  const [data, setData] = useState<any>(
+    () =>
+      (currentBank &&
+        cachedGraph({
+          bank_id: currentBank,
+          type: factType,
+          limit: brainRequestLimit(DEFAULT_FETCH_LIMIT, brainActive),
+          document_id: documentId,
+          chunk_id: chunkId,
+        })?.data) ??
+      null
+  );
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [tagFilters, setTagFilters] = useState<string[]>([]);
@@ -138,7 +188,7 @@ export function DataView({
   const itemsPerPage = 100;
 
   // Fetch limit state - how many memories to load from the API
-  const [fetchLimit, setFetchLimit] = useState(1000);
+  const [fetchLimit, setFetchLimit] = useState(DEFAULT_FETCH_LIMIT);
 
   // Which timestamp drives the constellation recency color
   type RecencyBasis = "mentioned_at" | "occurred_start" | "occurred_end";
@@ -174,46 +224,105 @@ export function DataView({
     });
   };
 
+  const loadConsolidationStatus = async () => {
+    if (!currentBank || factType !== "observation") return;
+    try {
+      const stats: any = await client.getBankStats(currentBank);
+      setConsolidationStatus({
+        pending_consolidation: stats.pending_consolidation || 0,
+        last_consolidated_at: stats.last_consolidated_at || null,
+      });
+    } catch {
+      // Error toast is shown automatically by the API client interceptor
+    }
+  };
+
+  // The read this view is waiting on. A newer read, or leaving the tab,
+  // cancels it so it stops competing with the one the user is looking at.
+  const readRef = useRef<AbortController | null>(null);
+  useEffect(
+    () => () => {
+      readRef.current?.abort();
+      // A remount (StrictMode does one in dev) must load again, not be
+      // collapsed into the read this cleanup just cancelled.
+      lastAutoLoadSig.current = null;
+    },
+    []
+  );
+
   // `silent` skips the loading spinner — used by the background consolidation
-  // poll so the view refreshes in place without flashing.
+  // poll so the view refreshes in place without flashing; a silent read never
+  // cancels one the user started. `force` skips the cache (refresh, poll).
   const loadData = async (
     limit?: number,
     q?: string,
     tags?: string[],
     tagsMatch?: string,
-    silent = false
+    silent = false,
+    force = false
   ) => {
     if (!currentBank) return;
+    if (silent && readRef.current) return;
 
+    const params: GraphParams = {
+      bank_id: currentBank,
+      type: factType,
+      // CUSTOM-HOOK: brain-network-request-limit begin
+      limit: brainRequestLimit(limit ?? fetchLimit, brainActive),
+      // CUSTOM-HOOK: brain-network-request-limit end
+      q,
+      tags,
+      tags_match: tagsMatch,
+      document_id: documentId,
+      chunk_id: chunkId,
+    };
+    const applied = { q: q ?? "", tags: tags ?? [], tagsMatch };
+
+    const hit = force ? undefined : cachedGraph(params);
+    if (hit) {
+      setData(hit.data);
+      setAppliedFilters(applied);
+      if (isFresh(hit)) {
+        readRef.current?.abort();
+        readRef.current = null;
+        setLoading(false);
+        loadConsolidationStatus();
+        return;
+      }
+      silent = true;
+    }
+
+    readRef.current?.abort();
+    const read = new AbortController();
+    readRef.current = read;
     if (!silent) setLoading(true);
     try {
-      const graphData: any = await client.getGraph({
-        bank_id: currentBank,
-        type: factType,
-        // CUSTOM-HOOK: brain-network-request-limit begin
-        limit: brainRequestLimit(limit ?? fetchLimit, brainActive),
-        // CUSTOM-HOOK: brain-network-request-limit end
-        q,
-        tags,
-        tags_match: tagsMatch,
-        document_id: documentId,
-        chunk_id: chunkId,
-      });
-      setData(graphData);
-      setAppliedFilters({ q: q ?? "", tags: tags ?? [], tagsMatch });
-
-      // Fetch consolidation status for observations
-      if (factType === "observation") {
-        const stats: any = await client.getBankStats(currentBank);
-        setConsolidationStatus({
-          pending_consolidation: stats.pending_consolidation || 0,
-          last_consolidated_at: stats.last_consolidated_at || null,
-        });
+      const graphData: any = await fetchGraph(params, read.signal);
+      if (read.signal.aborted) return;
+      storeGraph(params, graphData);
+      // A background refresh that found nothing new keeps the old object, so the
+      // constellation doesn't lay itself out again for the same memories.
+      setData((prev: unknown) => (sameGraph(prev, graphData) ? prev : graphData));
+      setAppliedFilters(applied);
+      loadConsolidationStatus();
+      // The sibling tabs are one click away and each read is slow on a big
+      // bank: warm them now, one after another, behind the visible one.
+      if (prefetchTypes && !q && !tags) {
+        prefetchTypes.reduce(
+          (chain, ft) =>
+            chain.then(() =>
+              prefetchGraph({ bank_id: currentBank, type: ft, limit: DEFAULT_FETCH_LIMIT })
+            ),
+          Promise.resolve()
+        );
       }
     } catch (error) {
       // Error toast is shown automatically by the API client interceptor
     } finally {
-      if (!silent) setLoading(false);
+      if (readRef.current === read) {
+        readRef.current = null;
+        setLoading(false);
+      }
     }
   };
 
@@ -502,7 +611,7 @@ export function DataView({
   useEffect(() => {
     pollTickRef.current = () => {
       const { tags, match } = resolveTagQuery();
-      loadData(undefined, searchQuery || undefined, tags, match, true);
+      loadData(undefined, searchQuery || undefined, tags, match, true, true);
       loadScopes();
     };
   });
@@ -628,8 +737,8 @@ export function DataView({
               </Button>
             </div>
           ) : (
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                 {compact && (
                   <Button
                     variant="ghost"
@@ -708,7 +817,14 @@ export function DataView({
                           onClick={() =>
                             (() => {
                               const { tags, match } = resolveTagQuery();
-                              loadData(fetchLimit, searchQuery || undefined, tags, match);
+                              loadData(
+                                fetchLimit,
+                                searchQuery || undefined,
+                                tags,
+                                match,
+                                false,
+                                true
+                              );
                             })()
                           }
                           disabled={loading}
@@ -722,9 +838,9 @@ export function DataView({
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-2 bg-muted rounded-lg p-1">
+              <div className="flex max-w-full items-center gap-2 overflow-x-auto bg-muted rounded-lg p-1">
                 <button
-                  onClick={() => setViewMode("constellation")}
+                  onClick={() => chooseViewMode("constellation")}
                   className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-1.5 ${
                     viewMode === "constellation"
                       ? "bg-background text-foreground shadow-sm"
@@ -735,7 +851,7 @@ export function DataView({
                   {t("constellation")}
                 </button>
                 <button
-                  onClick={() => setViewMode("table")}
+                  onClick={() => chooseViewMode("table")}
                   className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-1.5 ${
                     viewMode === "table"
                       ? "bg-background text-foreground shadow-sm"
@@ -746,7 +862,7 @@ export function DataView({
                   {t("table")}
                 </button>
                 <button
-                  onClick={() => setViewMode("timeline")}
+                  onClick={() => chooseViewMode("timeline")}
                   className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-1.5 ${
                     viewMode === "timeline"
                       ? "bg-background text-foreground shadow-sm"
@@ -1155,6 +1271,9 @@ export function TimelineView({
   const t = useTranslations("dataView");
   const locale = useLocale();
   const [granularity, setGranularity] = useState<Granularity>("month");
+  // Newest first by default, like `memories/list?order=desc`: the timeline used to be
+  // oldest-first only, which put today's memories on the last page (#5475).
+  const [newestFirst, setNewestFirst] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const timelineRef = useRef<HTMLDivElement>(null);
 
@@ -1168,13 +1287,13 @@ export function TimelineView({
       .sort((a: any, b: any) => {
         const dateA = new Date(a.occurred_start).getTime();
         const dateB = new Date(b.occurred_start).getTime();
-        return dateA - dateB;
+        return newestFirst ? dateB - dateA : dateA - dateB;
       });
 
     const withoutDates = filteredRows.filter((row: any) => !row.occurred_start);
 
     return { sortedItems: withDates, itemsWithoutDates: withoutDates };
-  }, [filteredRows]);
+  }, [filteredRows, newestFirst]);
 
   // Group items by granularity
   const timelineGroups = useMemo(() => {
@@ -1236,7 +1355,9 @@ export function TimelineView({
     });
 
     return Object.entries(groups)
-      .sort(([, a], [, b]) => a.date.getTime() - b.date.getTime())
+      .sort(([, a], [, b]) =>
+        newestFirst ? b.date.getTime() - a.date.getTime() : a.date.getTime() - b.date.getTime()
+      )
       .map(([key, { items, date }]) => ({
         key,
         label: getGroupLabel(key, date),
@@ -1331,6 +1452,25 @@ export function TimelineView({
           </div>
 
           <div className="flex items-center gap-1">
+            {/* Sort order */}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setNewestFirst((v) => !v);
+                setCurrentIndex(0);
+              }}
+              className="h-7 px-2 mr-2 text-[10px] gap-1"
+              title={newestFirst ? t("sortNewestFirst") : t("sortOldestFirst")}
+            >
+              {newestFirst ? (
+                <ArrowDownWideNarrow className="h-3 w-3" />
+              ) : (
+                <ArrowUpNarrowWide className="h-3 w-3" />
+              )}
+              {newestFirst ? t("sortNewestFirst") : t("sortOldestFirst")}
+            </Button>
+
             {/* Zoom controls */}
             <div className="flex items-center border border-border rounded mr-2">
               <Button

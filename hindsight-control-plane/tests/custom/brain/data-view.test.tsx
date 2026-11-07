@@ -6,6 +6,7 @@ import { lazy, Suspense } from "react";
 import messages from "@/messages/en.json";
 import { DataView } from "@/components/data-view";
 import type { ConstellationProps } from "@/components/constellation";
+import * as graphCache from "@/lib/graph-cache";
 
 const api = vi.hoisted(() => ({ getGraph: vi.fn(), enabled: true }));
 vi.mock("@/custom/brain/feature", async (original) => ({
@@ -44,6 +45,9 @@ vi.mock("@/components/constellation", () => ({
 beforeEach(() => {
   api.enabled = true;
   localStorage.clear();
+  // Upstream now serves a fresh graph from cache. These cases assert the budget
+  // that is requested, so a cached read must still refresh.
+  vi.spyOn(graphCache, "isFresh").mockReturnValue(false);
   api.getGraph.mockReset();
   api.getGraph.mockResolvedValue({
     nodes: [{ data: { id: "memory-a" } }],
@@ -51,7 +55,10 @@ beforeEach(() => {
     table_rows: [{ id: "memory-a", text: "Memory A" }],
   });
 });
-afterEach(() => cleanup());
+afterEach(() => {
+  vi.restoreAllMocks();
+  cleanup();
+});
 
 it("preserves bank/document/chunk filters while switching request budgets and returns to network", async () => {
   render(
