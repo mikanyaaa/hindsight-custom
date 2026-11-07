@@ -76,6 +76,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
+    "eslint-plugin-react-hooks": "^7.0.1",
     "@testing-library/react": "^16.3.2",
     "@vectorize-io/hindsight-client": "file:../hindsight-clients/typescript",
     "jsdom": "^27.4.0",
