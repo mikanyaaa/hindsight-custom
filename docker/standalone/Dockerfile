@@ -13,13 +13,22 @@
 #                                     Set to false when using external providers (TEI, OpenAI, Cohere)
 #   PRELOAD_ML_MODELS=true/false   - Pre-download ML models during build (default: true)
 #                                     Only effective when INCLUDE_LOCAL_MODELS=true
+#   NEXT_PUBLIC_BASE_PATH          - Control-plane base path, inlined by next build
+#   NEXT_PUBLIC_HINDSIGHT_THEME_WARM_GLASS=true
+#                                  - Opt in to the warm-glass theme and modular home.
+#                                    Any other value, including empty, leaves both off.
+#   NEXT_PUBLIC_HINDSIGHT_BRAIN_ENABLED=true
+#                                  - Opt in to the brain memory layout. Any other value leaves it off.
+#   Preloaded local model files are a cache for the unset local defaults. They do not
+#   override HINDSIGHT_API_EMBEDDINGS_* or HINDSIGHT_API_RERANKER_* at runtime.
 #
 # Examples:
-#   docker build -t hindsight .                                          # Both (standalone)
-#   docker build -t hindsight-api --target api-only .                    # API only
-#   docker build -t hindsight-cp --target cp-only .                      # Control Plane only
-#   docker build -t hindsight --build-arg PRELOAD_ML_MODELS=false .      # Skip ML model preload
-#   docker build -t hindsight --build-arg INCLUDE_LOCAL_MODELS=false .   # Skip local ML deps (for external providers)
+#   docker build -f docker/standalone/Dockerfile -t hindsight .
+#   docker build -f docker/standalone/Dockerfile --target api-only -t hindsight-api .
+#   docker build -f docker/standalone/Dockerfile --target cp-only -t hindsight-cp .
+#   docker build -f docker/standalone/Dockerfile --target cp-only -t hindsight-cp \
+#     --build-arg NEXT_PUBLIC_HINDSIGHT_THEME_WARM_GLASS=true \
+#     --build-arg NEXT_PUBLIC_HINDSIGHT_BRAIN_ENABLED=true .
 
 ARG PRELOAD_ML_MODELS=true
 ARG INCLUDE_LOCAL_MODELS=true
@@ -139,9 +148,16 @@ COPY hindsight-control-plane/ ./hindsight-control-plane/
 
 WORKDIR /app/memory-poc/hindsight-control-plane
 
-# Accept base path as build argument for reverse proxy deployments
-# Usage: docker build --build-arg NEXT_PUBLIC_BASE_PATH=/hindsight ...
+# Next.js inlines NEXT_PUBLIC_* while compiling. An undeclared build-arg is
+# dropped, so without these ARGs a custom image always gets the flags off even
+# when the build command sets them. Only the exact string "true" enables a flag.
+# Warm glass and the modular home share the theme flag. The brain layout is separate.
 ARG NEXT_PUBLIC_BASE_PATH=""
+ARG NEXT_PUBLIC_HINDSIGHT_THEME_WARM_GLASS=""
+ARG NEXT_PUBLIC_HINDSIGHT_BRAIN_ENABLED=""
+ENV NEXT_PUBLIC_BASE_PATH=${NEXT_PUBLIC_BASE_PATH}
+ENV NEXT_PUBLIC_HINDSIGHT_THEME_WARM_GLASS=${NEXT_PUBLIC_HINDSIGHT_THEME_WARM_GLASS}
+ENV NEXT_PUBLIC_HINDSIGHT_BRAIN_ENABLED=${NEXT_PUBLIC_HINDSIGHT_BRAIN_ENABLED}
 
 # Build Control Plane - run next build first, then custom standalone copy
 # (The build:standalone script expects a specific path structure that differs in Docker)

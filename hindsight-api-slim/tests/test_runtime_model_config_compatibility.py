@@ -48,17 +48,21 @@ def test_environment_overrides_are_kept_verbatim(monkeypatch):
     _clear_hindsight_env(monkeypatch)
     monkeypatch.setenv("HINDSIGHT_API_LLM_PROVIDER", "openai")
     monkeypatch.setenv("HINDSIGHT_API_LLM_MODEL", "gpt-4o-mini")
-    monkeypatch.setenv("HINDSIGHT_API_EMBEDDINGS_PROVIDER", "local")
-    monkeypatch.setenv("HINDSIGHT_API_EMBEDDINGS_LOCAL_MODEL", "BAAI/bge-small-en-v1.5")
+    monkeypatch.setenv("HINDSIGHT_API_EMBEDDINGS_PROVIDER", "onnx")
+    monkeypatch.setenv("HINDSIGHT_API_EMBEDDINGS_ONNX_MODEL_ID", "example/embed-keep")
+    monkeypatch.setenv("HINDSIGHT_API_EMBEDDINGS_LOCAL_MODEL", "example/embed-keep")
     monkeypatch.setenv("HINDSIGHT_API_RERANKER_PROVIDER", "local")
-    monkeypatch.setenv("HINDSIGHT_API_RERANKER_LOCAL_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2")
+    monkeypatch.setenv("HINDSIGHT_API_RERANKER_LOCAL_MODEL", "example/rerank-keep")
 
     config = HindsightConfig.from_env()
 
     assert config.llm_provider == "openai"
     assert config.llm_model == "gpt-4o-mini"
-    assert config.embeddings_provider == "local"
-    assert config.embeddings_local_model == "BAAI/bge-small-en-v1.5"
+    assert config.embeddings_provider == "onnx"
+    assert config.embeddings_onnx_model_id == "example/embed-keep"
+    assert config.embeddings_local_model == "example/embed-keep"
+    assert config.embeddings_local_model != "BAAI/bge-small-en-v1.5"
     assert config.reranker_provider == "local"
-    assert config.reranker_local_model == "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    assert config.reranker_local_model == "example/rerank-keep"
+    assert config.reranker_local_model != "hindsight-ai/hs-rerank-1"
     assert config.decision_model_provider == "none"

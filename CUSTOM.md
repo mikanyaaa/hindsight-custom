@@ -12,22 +12,29 @@ This is a **public customized copy** of [vectorize-io/hindsight](https://github.
 
 ## Runtime model compatibility
 
-Local embeddings stay on the pre-upgrade defaults unless the process environment
-says otherwise: provider `local`, model `BAAI/bge-small-en-v1.5`, dimension 384.
-Existing vectors remain readable. The LLM provider and model, the embedding
-provider and model, and the reranker provider and model are still read from the
-environment at startup. This tree does not select a hosted provider on its own.
+Provider and model selection stays in the process environment. An explicit
+embedding provider, embedding model, reranker provider, or reranker model is
+used as given and is not replaced by a built-in default. Built-in defaults apply
+only when the corresponding variable is unset. The Docker image may cache the
+unset local defaults at build time; that cache does not override the environment
+at runtime. Do not switch an already configured embedding or reranker model to
+one of those defaults.
 
-Upstream v1.2.0 changes the default local reranker, when
-`HINDSIGHT_API_RERANKER_LOCAL_MODEL` is unset, from
-`cross-encoder/ms-marco-MiniLM-L-6-v2` to `hindsight-ai/hs-rerank-1`. Set the
-variable to the previous model name to keep that reranker. The same variable
-selects `hindsight-ai/hs-rerank-1` explicitly. The local cross-encoder now returns
-raw logits and recall applies the sigmoid, for whichever model is configured.
+The vector width default remains 384. v1.2.0 does not add an Alembic revision
+after `c7e2f9a4d1b8`, which is also the v1.1.0 head, so a database already at
+that revision gets no further schema changes from this upgrade.
 
 UI login remains the control-plane access key (`HINDSIGHT_CP_ACCESS_KEY`).
-Authenticated MCP remains the API's bearer check: `HINDSIGHT_API_MCP_AUTH_TOKEN`
-when set, otherwise the tenant extension's `authenticate_mcp`.
+Authenticated MCP keeps the existing order: `HINDSIGHT_API_MCP_AUTH_TOKEN` when
+set, otherwise the configured tenant extension's `authenticate_mcp`. This tree
+does not replace that extension.
+
+The control-plane image inlines its opt-in UI at `next build`. Pass these as
+Docker build args (any value other than `true` leaves the feature off):
+
+- `NEXT_PUBLIC_HINDSIGHT_THEME_WARM_GLASS` — warm glass theme and modular home
+- `NEXT_PUBLIC_HINDSIGHT_BRAIN_ENABLED` — brain memory layout
+- `NEXT_PUBLIC_BASE_PATH` — reverse-proxy base path
 
 ## Syncing with upstream
 ```bash
