@@ -257,7 +257,10 @@ async def list_memory_units(
             FROM {fq_table("unit_entities")} ue
             JOIN {fq_table("entities")} e ON ue.entity_id = e.id
             WHERE ue.unit_id = ANY($1::uuid[])
-            ORDER BY ue.unit_id
+            -- Same order as the single-memory read. The list joins names into
+            -- one string; an unordered scan made that string disagree with the
+            -- detail's entity list for the same memory.
+            ORDER BY ue.unit_id, e.canonical_name, e.id
         """,
             unit_ids,
         )

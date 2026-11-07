@@ -434,7 +434,13 @@ def _entity_rows_for_units_sql(
             f"AND NOT EXISTS (SELECT 1 FROM {ue} d WHERE d.unit_id = obs.id)"
         )
 
-    return f"({direct}) UNION ({inherited})"
+    # canonical_name then id: the list endpoint joins names in this order, and
+    # the detail endpoint returns them in result order. Without it the two
+    # reads of one memory can disagree.
+    return (
+        f"SELECT unit_id, entity_id, canonical_name FROM (({direct}) UNION ({inherited})) entity_rows "
+        f"ORDER BY unit_id, canonical_name, entity_id"
+    )
 
 
 async def entities_for_units(

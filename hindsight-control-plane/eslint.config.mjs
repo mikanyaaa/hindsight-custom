@@ -1,12 +1,16 @@
 import js from "@eslint/js";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
+import reactHooks from "eslint-plugin-react-hooks";
 
 export default [
   js.configs.recommended,
   ...nextVitals,
   ...nextTs,
   {
+    // ESLint 9 requires the plugin on the same config object as the rules.
+    // next's shared config registers it for its own objects only.
+    plugins: { "react-hooks": reactHooks },
     rules: {
       "@typescript-eslint/no-unused-vars": "warn",
       "@typescript-eslint/no-explicit-any": "warn",
