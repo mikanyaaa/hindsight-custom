@@ -53,7 +53,8 @@ export function convertHindsightGraphData(hindsightData: {
   table_rows?: Array<{ id: string; text: string; entities?: string; context?: string }>;
 }): GraphData {
   // Index once rather than scanning all rows for every node. Keep the first
-  // duplicate row to preserve the previous Array.find behavior.
+  // duplicate row: Map construction would keep the last, which changes the
+  // label Array.find used to show.
   const rowsById = new Map<string, NonNullable<typeof hindsightData.table_rows>[number]>();
   for (const row of hindsightData.table_rows || []) {
     if (!rowsById.has(row.id)) rowsById.set(row.id, row);

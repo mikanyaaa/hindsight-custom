@@ -10,6 +10,25 @@ This is a **public customized copy** of [vectorize-io/hindsight](https://github.
   - Dev: `npm install` at repo root, then `npm run dev -w @vectorize-io/hindsight-control-plane` (port 9999).
 - Docker: `docker/standalone/Dockerfile` (stages `cp-builder`, `cp-only`; Next.js standalone output). Compose files in `docker/docker-compose/`.
 
+## Runtime model compatibility
+
+Local embeddings stay on the pre-upgrade defaults unless the process environment
+says otherwise: provider `local`, model `BAAI/bge-small-en-v1.5`, dimension 384.
+Existing vectors remain readable. The LLM provider and model, the embedding
+provider and model, and the reranker provider and model are still read from the
+environment at startup. This tree does not select a hosted provider on its own.
+
+Upstream v1.2.0 changes the default local reranker, when
+`HINDSIGHT_API_RERANKER_LOCAL_MODEL` is unset, from
+`cross-encoder/ms-marco-MiniLM-L-6-v2` to `hindsight-ai/hs-rerank-1`. Set the
+variable to the previous model name to keep that reranker. The same variable
+selects `hindsight-ai/hs-rerank-1` explicitly. The local cross-encoder now returns
+raw logits and recall applies the sigmoid, for whichever model is configured.
+
+UI login remains the control-plane access key (`HINDSIGHT_CP_ACCESS_KEY`).
+Authenticated MCP remains the API's bearer check: `HINDSIGHT_API_MCP_AUTH_TOKEN`
+when set, otherwise the tenant extension's `authenticate_mcp`.
+
 ## Syncing with upstream
 ```bash
 git remote add upstream https://github.com/vectorize-io/hindsight.git   # once
@@ -57,8 +76,9 @@ Kept running in the mirror: `detect-changes`, `build-control-plane` (lint/typech
 ### Sidebar accessibility (PR B)
 
 These accessibility fixes apply independently of any theme flag. Native modified
-links keep their browser behavior; ordinary navigation and chrome click/Enter/Space
-collapse behavior remain unchanged, including the upstream aside role.
+links keep their browser behavior. Upstream v1.2 draws the same nav in a desktop
+rail and a phone drawer, and the keyboard toggle is the explicit button. The
+aside stays a mouse target and does not carry a button role.
 
 | File | Marker names | Purpose |
 | --- | --- | --- |

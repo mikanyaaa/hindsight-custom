@@ -44,6 +44,12 @@ class FakeTokenizer:
 class FakeSessionOptions:
     def __init__(self):
         self.enable_cpu_mem_arena = True
+        self.intra_op_num_threads = 0
+        self.inter_op_num_threads = 0
+        self.config_entries: dict[str, str] = {}
+
+    def add_session_config_entry(self, key, value):
+        self.config_entries[key] = value
 
 
 class FakeOnnxSession:
@@ -225,6 +231,34 @@ async def test_onnx_embeddings_dimension_mismatch_raises_value_error():
     with patch.dict(sys.modules, {"transformers": fake_transformers, "onnxruntime": fake_onnxruntime}):
         with pytest.raises(ValueError, match="does not match model output"):
             await emb.initialize()
+
+
+class NaNOnnxSession(FakeOnnxSession):
+    def run(self, output_names, inputs):
+        return [np.full((inputs["input_ids"].shape[0], 3, 2), np.nan, dtype=np.float32)]
+
+
+@pytest.mark.asyncio
+async def test_onnx_embeddings_nan_startup_probe_fails_initialize():
+    """A model that computes NaN must fail at startup, not hours later at the pgvector bind (#6255)."""
+    emb = OnnxEmbeddings(
+        model_id="intfloat/multilingual-e5-small",
+        model_path="/models/e5/onnx/model.onnx",
+        tokenizer_name_or_path="/models/e5",
+    )
+    fake_transformers = SimpleNamespace(
+        AutoTokenizer=SimpleNamespace(from_pretrained=MagicMock(return_value=FakeTokenizer()))
+    )
+    fake_onnxruntime = SimpleNamespace(
+        InferenceSession=MagicMock(return_value=NaNOnnxSession()),
+        SessionOptions=FakeSessionOptions,
+        get_available_providers=MagicMock(return_value=["CPUExecutionProvider"]),
+    )
+
+    with patch.dict(sys.modules, {"transformers": fake_transformers, "onnxruntime": fake_onnxruntime}):
+        with pytest.raises(RuntimeError, match=r"Embeddings\[onnx:intfloat/multilingual-e5-small\].*non-finite"):
+            await emb.initialize()
+    assert emb._session is None
 
 
 @pytest.mark.asyncio

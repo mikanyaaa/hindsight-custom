@@ -3,9 +3,12 @@ Embedding generation utilities for memory units.
 """
 
 import logging
+import math
 from typing import Literal, Protocol
 
 from ...config import ENV_EMBEDDINGS_MAX_INPUT_TOKENS, get_config
+from ..llm_interface import ProviderRateLimitResetError
+from ..llm_trace import EMBEDDING_SCOPE_PREFIX, trace_model_call
 from ..token_encoding import count_tokens, truncate_many_to_tokens
 
 logger = logging.getLogger(__name__)
@@ -98,6 +101,16 @@ def _validate_embedding_vector(vector: list[float], *, index: int, expected_dime
         raise RuntimeError(f"embedding {index} has dimension 0; expected {expected_dimension}")
     if actual_dimension != expected_dimension:
         raise RuntimeError(f"embedding {index} has dimension {actual_dimension}; expected {expected_dimension}")
+    # A NaN/Inf vector otherwise travels to the pgvector bind and fails there as an
+    # opaque "NaN not allowed in vector" that names neither the backend nor the vector
+    # (issue #6255). Fail here, loudly, with the index. Left retryable: the observed
+    # case was a transient backend glitch that clean re-embeds of the same text fixed.
+    non_finite = sum(1 for x in vector if not math.isfinite(x))
+    if non_finite:
+        raise RuntimeError(
+            f"embedding {index} contains {non_finite} non-finite value(s) (NaN/Inf) of {actual_dimension}; "
+            "the embedding backend produced an unusable vector"
+        )
     return vector
 
 
@@ -134,9 +147,18 @@ async def generate_embeddings_batch(
         texts = _truncate_inputs(texts, max_input_tokens, embeddings_backend, input_type)
 
     try:
-        embeddings = await _encode_with_input_type(embeddings_backend, texts, input_type)
+        embeddings = await trace_model_call(
+            embeddings_backend,
+            f"{EMBEDDING_SCOPE_PREFIX}{input_type}",
+            len(texts),
+            lambda: _encode_with_input_type(embeddings_backend, texts, input_type),
+            request={"texts": texts},
+        )
+    except ProviderRateLimitResetError:
+        # A control signal, not a failure: the worker parks the operation until then.
+        raise
     except Exception as e:
-        raise Exception(f"Failed to generate batch embeddings: {str(e)}")
+        raise Exception(f"Failed to generate batch embeddings: {str(e)}") from e
 
     # Guarantee 1:1 alignment with input texts. A silent length mismatch here
     # propagates downstream as zip() drops items, eventually surfacing as an
