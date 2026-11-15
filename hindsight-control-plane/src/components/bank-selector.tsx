@@ -19,7 +19,9 @@ import {
 } from "@/components/content-composer";
 
 import { LanguageSwitcher, useSwitchLocale } from "@/components/language-switcher";
-import { SidebarMenuButton } from "@/components/sidebar";
+// CUSTOM-HOOK: frame-quiet-paper-bar begin
+import { CommandPalette } from "@/custom/frame/command-palette";
+// CUSTOM-HOOK: frame-quiet-paper-bar end
 import { locales, localeNames, type Locale } from "@/i18n/config";
 import {
   DropdownMenu,
@@ -615,8 +617,6 @@ function BankSelectorInner() {
         {/* Separator */}
         <div className="hidden sm:block h-8 w-px bg-border" />
 
-        {currentBank && <SidebarMenuButton />}
-
         {/* Memory Bank Selector */}
         <Popover
           open={open}
@@ -824,6 +824,8 @@ function BankSelectorInner() {
           </PopoverContent>
         </Popover>
 
+        <CommandPalette />
+
         {/* Separator */}
         <div className="hidden sm:block h-8 w-px bg-border" />
 
@@ -846,7 +848,7 @@ function BankSelectorInner() {
         {/* Spacer */}
         <div className="hidden sm:block flex-1" />
 
-        {/* Phones: GitHub, theme, language and logout fold into one menu. */}
+        {/* Phones: GitHub, language and logout fold into one menu. Theme stays in the bar. */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -869,14 +871,6 @@ function BankSelectorInner() {
                 <Github className="h-4 w-4 mr-2" />
                 GitHub
               </a>
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={toggleTheme}>
-              {theme === "light" ? (
-                <Moon className="h-4 w-4 mr-2" />
-              ) : (
-                <Sun className="h-4 w-4 mr-2" />
-              )}
-              {theme === "light" ? tNav("darkMode") : tNav("lightMode")}
             </DropdownMenuItem>
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
@@ -907,6 +901,17 @@ function BankSelectorInner() {
           </DropdownMenuContent>
         </DropdownMenu>
 
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggleTheme}
+          className="h-11 w-11 shrink-0"
+          title={theme === "light" ? tNav("darkMode") : tNav("lightMode")}
+          aria-label={theme === "light" ? tNav("darkMode") : tNav("lightMode")}
+        >
+          {theme === "light" ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
+        </Button>
+
         <div className="hidden md:contents">
           {/* GitHub Link */}
           <a
@@ -922,17 +927,6 @@ function BankSelectorInner() {
 
           {/* Separator */}
           <div className="h-8 w-px bg-border" />
-
-          {/* Dark Mode Toggle */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleTheme}
-            className="h-9 w-9"
-            title={theme === "light" ? tNav("darkMode") : tNav("lightMode")}
-          >
-            {theme === "light" ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
-          </Button>
 
           <LanguageSwitcher />
 

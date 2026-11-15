@@ -6,6 +6,9 @@ import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { BankSelector } from "@/components/bank-selector";
 import { Sidebar } from "@/components/sidebar";
+// CUSTOM-HOOK: frame-quiet-paper-shell begin
+import { QuietTabBar } from "@/custom/frame/tab-bar";
+// CUSTOM-HOOK: frame-quiet-paper-shell end
 import { DataView } from "@/components/data-view";
 import { DocumentsView } from "@/components/documents-view";
 import { EntitiesView } from "@/components/entities-view";
@@ -341,10 +344,10 @@ export default function BankPage() {
       </div>
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
-        <Sidebar currentTab={view} onTabChange={handleTabChange} />
+        <Sidebar drawer={false} currentTab={view} onTabChange={handleTabChange} />
 
         <main className="flex-1 min-w-0 overflow-y-auto">
-          <div className="p-4 sm:p-6 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <div className="px-4 pt-4 sm:px-6 sm:pt-6 pb-[calc(4.75rem+env(safe-area-inset-bottom))] md:pb-6">
             {/* Content width staircase. Without a cap the views ran the full
                 width of the window, which on a 16" display left body text and
                 table rows spanning ~1700px. The Kit specifies a flat 1024px;
@@ -949,6 +952,7 @@ export default function BankPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <QuietTabBar currentTab={view} onTabChange={handleTabChange} />
     </div>
   );
 }

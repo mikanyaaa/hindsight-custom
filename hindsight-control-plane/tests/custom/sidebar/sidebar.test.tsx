@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { setSidebarCollapsed } from "@/custom/frame/sidebar-state";
 
 vi.mock("next-intl", () => ({ useTranslations: () => (key: string) => key }));
 vi.mock("@/lib/bank-context", () => ({ useBank: () => ({ currentBank: "test-bank" }) }));
@@ -10,18 +11,19 @@ vi.mock("next/link", () => ({
   default: (props: React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...props} />,
 }));
 const { Sidebar } = await import("@/components/sidebar");
+beforeEach(() => setSidebarCollapsed(false));
 afterEach(cleanup);
 
 async function setup() {
   const navigate = vi.fn();
   render(<Sidebar currentTab="home" onTabChange={navigate} />);
-  await waitFor(() => expect(screen.getByText("vtest")).toBeTruthy());
+  await waitFor(() => expect(screen.getByText("Hindsight vtest")).toBeTruthy());
   const rail = document.querySelector("aside");
   if (!rail) throw new Error("sidebar rail missing");
   return {
     navigate,
     rail,
-    toggle: screen.getByRole("button", { name: "expandSidebar" }),
+    toggle: screen.getByRole("button", { name: "collapseSidebar" }),
     link: screen.getByRole("link", { name: "memories" }),
   };
 }
@@ -37,16 +39,16 @@ describe("sidebar links and existing toggle behavior", () => {
     // Upstream v1.2 keeps the aside as a mouse target and puts keyboard toggle on the button.
     expect(rail.getAttribute("role")).toBeNull();
     fireEvent.click(rail);
-    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
     fireEvent.keyDown(link, { key: "Enter" });
-    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(link);
     expect(navigate).toHaveBeenCalledWith("data");
-    expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    fireEvent.click(screen.getByRole("button", { name: "collapseSidebar" }));
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(screen.getByRole("button", { name: "expandSidebar" }));
     expect(
-      screen.getByRole("button", { name: "expandSidebar" }).getAttribute("aria-expanded")
-    ).toBe("false");
+      screen.getByRole("button", { name: "collapseSidebar" }).getAttribute("aria-expanded")
+    ).toBe("true");
   });
   it.each(["ctrlKey", "metaKey", "shiftKey", "altKey", "middle"])(
     "leaves %s native without toggling",
@@ -60,7 +62,7 @@ describe("sidebar links and existing toggle behavior", () => {
       fireEvent(link, event);
       expect(event.defaultPrevented).toBe(false);
       expect(navigate).not.toHaveBeenCalled();
-      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(toggle.getAttribute("aria-expanded")).toBe("true");
     }
   );
 });

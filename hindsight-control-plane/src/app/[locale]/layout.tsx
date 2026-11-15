@@ -11,6 +11,10 @@ import { Toaster } from "@/components/ui/sonner";
 import { geistMono, geistSans } from "@/custom/theme/fonts";
 import { THEME_COOKIE, THEME_INIT_SCRIPT, themeFromCookie } from "@/custom/theme/init";
 // CUSTOM-HOOK: theme-quiet-paper-fonts end
+// CUSTOM-HOOK: frame-quiet-paper-seed begin
+import { SIDEBAR_COOKIE, sidebarCollapsedFromCookie } from "@/custom/frame/sidebar-state";
+import { SidebarCollapsedProvider } from "@/custom/frame/sidebar-provider";
+// CUSTOM-HOOK: frame-quiet-paper-seed end
 
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
@@ -33,6 +37,7 @@ export default async function LocaleLayout({
   // CUSTOM-HOOK: theme-quiet-paper-boot begin
   const storedTheme = themeFromCookie((await cookies()).get(THEME_COOKIE)?.value);
   // CUSTOM-HOOK: theme-quiet-paper-boot end
+  const sidebarCollapsed = sidebarCollapsedFromCookie((await cookies()).get(SIDEBAR_COOKIE)?.value);
 
   return (
     <html
@@ -45,13 +50,15 @@ export default async function LocaleLayout({
           runs before the rest of the body is parsed, so the first paint has .dark. */}
       <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       <body className="bg-background text-foreground">
-        <ThemeProvider initialTheme={storedTheme ?? "light"}>
-          <FeaturesProvider>
-            <BankProvider>
-              <NextIntlClientProvider>{children}</NextIntlClientProvider>
-            </BankProvider>
-          </FeaturesProvider>
-        </ThemeProvider>
+        <SidebarCollapsedProvider collapsed={sidebarCollapsed}>
+          <ThemeProvider initialTheme={storedTheme ?? "light"}>
+            <FeaturesProvider>
+              <BankProvider>
+                <NextIntlClientProvider>{children}</NextIntlClientProvider>
+              </BankProvider>
+            </FeaturesProvider>
+          </ThemeProvider>
+        </SidebarCollapsedProvider>
         <Toaster />
       </body>
     </html>
