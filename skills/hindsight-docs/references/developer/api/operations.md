@@ -83,6 +83,14 @@ Each run works in committed batches under a wall-clock budget. A backlog too lar
 
 **Triggers:** any delete that removes memory_units — `DELETE /documents/{id}`, `DELETE /memories/{id}`, and re-retaining an existing `document_id` (the upsert path). A full bank wipe (`delete_bank`) is a no-op: there's nothing left in the bank to maintain.
 
+### `reflect`
+
+Submitted by the MCP `reflect` tool. The handler runs the same agentic reflect as a synchronous call and stores the public answer — text, structured output, and token usage — at `result_metadata.result`. Source facts and the trace are stored only when the caller asked for them.
+
+The MCP tool waits a few seconds (`wait_seconds`, at most 25). A reflect that is still running comes back as `pending` with an `operation_id`; `get_reflect_result` polls that operation and returns the answer. The HTTP reflect endpoint stays synchronous.
+
+One worker slot is reserved for `reflect` (`HINDSIGHT_API_WORKER_REFLECT_RESERVED_SLOTS`, default 1) so consolidation and mental-model refresh cannot occupy every slot. The reservation is a floor, not a cap: extra reflects still use the shared pool.
+
 ### `webhook_delivery`
 
 After certain operations complete (e.g., consolidation finishing on a bank with a registered webhook), Hindsight enqueues a `webhook_delivery` task. The handler POSTs the payload to the configured URL and retries on transient failures.
@@ -102,7 +110,7 @@ Query parameters:
 | Param | Description |
 |-------|-------------|
 | `status` | Filter by `pending`, `processing`, `completed`, `failed`, `cancelled`. |
-| `type` | Filter by `retain`, `file_convert_retain`, `consolidation`, `refresh_mental_model`, `graph_maintenance`, `webhook_delivery`. |
+| `type` | Filter by `retain`, `reflect`, `file_convert_retain`, `consolidation`, `refresh_mental_model`, `graph_maintenance`, `webhook_delivery`. |
 | `limit` | 1–100, default 20. |
 | `offset` | Pagination offset. |
 | `exclude_parents` | Exclude parent batch operations from results (large `retain_batch` calls create one parent + N children). |

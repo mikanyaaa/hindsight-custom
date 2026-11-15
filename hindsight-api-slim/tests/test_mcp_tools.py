@@ -178,6 +178,54 @@ _KNOWLEDGE_PAGE: dict[str, Any] = {
 }
 
 
+def _wire_fast_reflect(memory):
+    """Make submit_async_reflect run the mocked reflect and complete on the first poll.
+
+    The tool no longer calls reflect_async itself. Existing tests still assert on
+    that mock, so the stand-in worker forwards the same arguments and stores the
+    shaped answer where the wait reads it.
+    """
+    from hindsight_api.engine.operation_metadata import reflect_result_payload
+
+    ops: dict[str, dict] = {}
+    previous_status = memory.get_operation_status
+
+    async def _submit(bank_id, reflect_kwargs, request_context=None, **_kwargs):
+        flags = {
+            "include_based_on": bool(reflect_kwargs.get("include_based_on", False)),
+            "include_trace": bool(reflect_kwargs.get("include_trace", False)),
+        }
+        engine_kwargs = {key: value for key, value in reflect_kwargs.items() if key not in flags}
+        result = await memory.reflect_async(bank_id=bank_id, request_context=request_context, **engine_kwargs)
+        dump = result.model_dump
+        try:
+            data = dump(mode="json")
+        except TypeError:
+            data = dump()
+        payload = reflect_result_payload(data, **flags)
+        if engine_kwargs.get("response_schema") is not None and hasattr(result, "structured_output"):
+            payload["structured_output"] = result.structured_output
+        op_id = f"op-reflect-{len(ops) + 1}"
+        ops[op_id] = payload
+        return {"operation_id": op_id}
+
+    async def _status(bank_id, operation_id, **kwargs):
+        if operation_id in ops:
+            return {
+                "operation_id": operation_id,
+                "id": operation_id,
+                "status": "completed",
+                "operation_type": "reflect",
+                "task_type": "reflect",
+                "result_metadata": {"result": ops[operation_id]},
+            }
+        return await previous_status(bank_id, operation_id, **kwargs)
+
+    memory.submit_async_reflect = AsyncMock(side_effect=_submit)
+    memory.get_operation_status = AsyncMock(side_effect=_status)
+    return memory
+
+
 @pytest.fixture
 def mock_memory():
     """Create a mock MemoryEngine with all MCP tool methods."""
@@ -297,6 +345,7 @@ def mock_memory():
     memory.update_knowledge_node = AsyncMock(return_value=dict(_KNOWLEDGE_PAGE_NODE))
     memory.delete_knowledge_node = AsyncMock(return_value=True)
 
+    _wire_fast_reflect(memory)
     return memory
 
 
@@ -466,7 +515,8 @@ class TestMentalModelToolRegistration:
         assert "get_knowledge_base_tree" in tools
         assert "create_knowledge_page" in tools
         assert "delete_knowledge_node" in tools
-        assert len(tools) == 39
+        assert "get_reflect_result" in tools
+        assert len(tools) == 40
 
     def test_all_tools_have_nonempty_descriptions(self):
         """Every registered tool must expose a non-empty description.
@@ -1685,29 +1735,48 @@ class TestMemoryBrowsingTools:
 @pytest.mark.asyncio
 class TestSyncRetainTool:
     async def test_sync_retain_basic(self, mock_memory):
-        mock_memory.retain_batch_async.return_value = [["unit-1", "unit-2"]]
+        mock_memory.get_operation_status = AsyncMock(
+            return_value={
+                "status": "completed",
+                "operation_type": "batch_retain",
+                "result_metadata": {"memory_ids": ["unit-1", "unit-2"]},
+            }
+        )
         mcp = _make_mcp_server(mock_memory, {"sync_retain"}, include_bank_id=True)
         result = await _tools(mcp)["sync_retain"].fn(content="test memory")
         assert result["status"] == "completed"
         assert result["memory_ids"] == ["unit-1", "unit-2"]
+        assert result["operation_id"] == "op-retain"
 
     async def test_sync_retain_single_bank(self, mock_memory):
-        mock_memory.retain_batch_async.return_value = [["unit-1"]]
+        mock_memory.get_operation_status = AsyncMock(
+            return_value={
+                "status": "completed",
+                "operation_type": "batch_retain",
+                "result_metadata": {"memory_ids": ["unit-1"]},
+            }
+        )
         mcp = _make_mcp_server(mock_memory, {"sync_retain"}, include_bank_id=False)
         result = await _tools(mcp)["sync_retain"].fn(content="test memory")
         assert result["status"] == "completed"
         assert result["memory_ids"] == ["unit-1"]
 
     async def test_sync_retain_with_tags(self, mock_memory):
-        mock_memory.retain_batch_async.return_value = [["unit-1"]]
+        mock_memory.get_operation_status = AsyncMock(
+            return_value={
+                "status": "completed",
+                "operation_type": "batch_retain",
+                "result_metadata": {"memory_ids": ["unit-1"]},
+            }
+        )
         mcp = _make_mcp_server(mock_memory, {"sync_retain"}, include_bank_id=True)
         result = await _tools(mcp)["sync_retain"].fn(content="test", tags=["project:alpha"])
         assert result["status"] == "completed"
-        call_kwargs = mock_memory.retain_batch_async.call_args.kwargs
+        call_kwargs = mock_memory.submit_async_retain.call_args.kwargs
         assert call_kwargs["contents"][0]["tags"] == ["project:alpha"]
 
     async def test_sync_retain_error(self, mock_memory):
-        mock_memory.retain_batch_async.side_effect = Exception("DB error")
+        mock_memory.submit_async_retain.side_effect = Exception("DB error")
         mcp = _make_mcp_server(mock_memory, {"sync_retain"}, include_bank_id=True)
         result = await _tools(mcp)["sync_retain"].fn(content="test")
         assert result["status"] == "error"
@@ -1875,7 +1944,7 @@ class TestRecallReflectTagsMatch:
 class TestTagsAndBankTools:
     async def test_list_tags(self, mock_memory):
         mcp = _make_mcp_server(mock_memory, {"list_tags"}, include_bank_id=True)
-        result = await _tools(mcp)["list_tags"].fn(q="project:*", limit=50)
+        await _tools(mcp)["list_tags"].fn(q="project:*", limit=50)
         call_kwargs = mock_memory.list_tags.call_args.kwargs
         assert call_kwargs["pattern"] == "project:*"
         assert call_kwargs["limit"] == 50
@@ -1924,7 +1993,7 @@ class TestTagsAndBankTools:
 
     async def test_update_bank(self, mock_memory):
         mcp = _make_mcp_server(mock_memory, {"update_bank"}, include_bank_id=True)
-        result = await _tools(mcp)["update_bank"].fn(name="New Name", mission="New Mission")
+        await _tools(mcp)["update_bank"].fn(name="New Name", mission="New Mission")
         # name and config are applied by a single engine call
         call = mock_memory.update_bank.call_args
         assert call.kwargs["name"] == "New Name"
@@ -2672,6 +2741,7 @@ def _reflect_mcp_with_trace(include_bank_id_param: bool):
             structured_output=None,
         )
     )
+    _wire_fast_reflect(memory)
     mcp = FastMCP("test")
     config = MCPToolsConfig(
         bank_id_resolver=lambda: "test-bank",

@@ -169,7 +169,7 @@ Store information to long-term memory.
 
 ### sync_retain
 
-Store information to long-term memory and wait for completion. Unlike [`retain`](#retain) (which is asynchronous), `sync_retain` blocks until the memory is fully stored and immediately available for recall — useful for read-after-write flows where you query right after storing.
+Store information to long-term memory and wait for it to finish. Unlike [`retain`](#retain) (which returns as soon as the work is queued), `sync_retain` waits up to `wait_seconds` for the existing retain operation. When it finishes in time the memory is available for recall and the response includes `memory_ids`. When it is still running, the response is `{"status": "pending", "operation_id": "...", "hint": "call get_operation with this operation_id"}`. Poll that id with [`get_operation`](#get_operation). `get_operation` has to be on the bank's tool allowlist; it is not added automatically.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -179,6 +179,7 @@ Store information to long-term memory and wait for completion. Unlike [`retain`]
 | `tags` | list[string] | No | Tags for organizing and filtering this memory |
 | `metadata` | object | No | Key-value metadata to attach (e.g., `{"source": "slack"}`) |
 | `document_id` | string | No | Associate this memory with an existing document |
+| `wait_seconds` | integer | No | Seconds to wait before returning pending. Clamped to 0–25 (default: `20`). `0` checks once and returns immediately if the retain is still running |
 
 **Example:**
 ```json
@@ -256,6 +257,15 @@ Generate thoughtful analysis by synthesizing stored memories with the bank's per
 | `tags` | list[string] | No | Scope memories, observations, mental models, and tagged directives. Omitted tags leave memory retrieval unfiltered but load only untagged directives |
 | `tags_match` | string | No | `any` (default), `all`, `any_strict`, `all_strict`, or `exact`. Untagged directives remain global in every mode |
 | `include_trace` | boolean | No | Include `tool_trace` and `llm_trace` debugging output. Defaults to `false` to keep responses small |
+| `wait_seconds` | integer | No | Seconds to wait before returning pending. Clamped to 0–25 (default: `20`) |
+
+A reflect that finishes within the wait returns the same body as before (`text`, and `structured_output` / `usage` when present). Source facts and the trace are included only when asked for. A reflect that is still running returns:
+
+```json
+{"status": "pending", "operation_id": "<id>", "hint": "call get_reflect_result with this operation_id"}
+```
+
+Pass that `operation_id` to `get_reflect_result`. An allowlist that includes `reflect` also enables `get_reflect_result`.
 
 The MCP tool forwards `tags_match` only when `tags` is present. Pass
 `tags: []` with `tags_match: "exact"` to select the empty/global scope for raw
@@ -278,6 +288,20 @@ untagged directives.
 - When reasoned analysis is needed, not just fact retrieval
 - Questions like "What should I do?" rather than "What did I say?"
 - Synthesizing patterns across multiple memories
+
+---
+
+### get_reflect_result
+
+Fetch the answer for a reflect that came back pending. The operation has to belong to the bank this call is authorized for; another bank's operation is an error, not an answer.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `operation_id` | string | Yes | The `operation_id` from a pending reflect |
+| `wait_seconds` | integer | No | Seconds to wait before returning pending again. Clamped to 0–25 (default: `20`) |
+| `bank_id` | string | No | Bank to read from, on a multi-bank server. Defaults to the session bank |
+
+A completed reflect returns the same body `reflect` would have returned. A reflect that is still running returns the pending object again. A failed, cancelled, missing, or non-reflect operation returns `status: "error"`.
 
 ---
 
@@ -663,7 +687,7 @@ The `config_updates` object accepts any bank-configurable field by its Python fi
 - `recall_include_chunks` — include raw chunks in recall results
 - `recall_prefer_observations` — default `prefer_observations` for recall calls that omit it
 - `recall_max_tokens` — max tokens for recall results
-- `mcp_enabled_tools` — tool allowlist for this bank
+- `mcp_enabled_tools` — tool allowlist for this bank. A list that includes `reflect` also allows `get_reflect_result`
 
 ---
 

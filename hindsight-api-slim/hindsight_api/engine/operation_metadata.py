@@ -15,6 +15,13 @@ if TYPE_CHECKING:
     from .mental_model_refresh import RefreshFailureReason, RefreshOperationOutcome
 
 MAX_EXTRACTION_ERROR_SAMPLES = 5
+# A retain's unit ids are useful to the caller that waited for it (MCP sync_retain).
+# Past this many, the operations row would be a second copy of the unit table, so
+# the list is omitted and memory_ids_truncated is set instead.
+MAX_RETAIN_RESULT_MEMORY_IDS = 200
+
+_REFLECT_TRACE_FIELDS = ("tool_trace", "llm_trace", "directives_applied")
+_MISSING = object()
 
 
 @dataclass
@@ -109,6 +116,10 @@ class RetainOutcomeMetadata:
     unit_ids_count: int
     extraction_errors_count: int = 0
     extraction_errors_sample: list[str] = field(default_factory=list)
+    # None means "not recorded" (over the cap, or a child written before this field
+    # existed). An empty list means the retain stored no units.
+    memory_ids: list[str] | None = None
+    memory_ids_truncated: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dict for JSON serialization, omitting empty optional samples."""
@@ -118,7 +129,27 @@ class RetainOutcomeMetadata:
         }
         if self.extraction_errors_sample:
             data["extraction_errors_sample"] = self.extraction_errors_sample[:MAX_EXTRACTION_ERROR_SAMPLES]
+        if self.memory_ids is not None:
+            data["memory_ids"] = self.memory_ids
+        if self.memory_ids_truncated:
+            data["memory_ids_truncated"] = True
         return data
+
+
+def retain_outcome_from_unit_ids(
+    unit_ids: list[list[str]],
+    extraction_errors: RetainExtractionErrors,
+) -> RetainOutcomeMetadata:
+    """Outcome metadata for one retain, including ids only while the list stays small."""
+    flat = [unit_id for group in unit_ids for unit_id in group]
+    truncated = len(flat) > MAX_RETAIN_RESULT_MEMORY_IDS
+    return RetainOutcomeMetadata(
+        unit_ids_count=len(flat),
+        extraction_errors_count=extraction_errors.count,
+        extraction_errors_sample=extraction_errors.sample,
+        memory_ids=None if truncated else flat,
+        memory_ids_truncated=truncated,
+    )
 
 
 @dataclass
@@ -127,11 +158,36 @@ class RetainOutcomeAggregate:
 
     unit_ids_count: int = 0
     extraction_errors: RetainExtractionErrors = field(default_factory=RetainExtractionErrors)
+    memory_ids: list[str] | None = field(default_factory=list)
+    memory_ids_truncated: bool = False
+    # False once any child omitted the list without saying it was truncated (a worker
+    # from before memory_ids existed). The parent then omits the list too, rather
+    # than publishing a partial one as if it were complete.
+    _memory_ids_known: bool = field(default=True, init=False, repr=False)
 
     def add_metadata(self, metadata: Mapping[str, Any]) -> None:
         """Fold one child operation's result_metadata into the aggregate."""
         self.unit_ids_count += int(metadata.get("unit_ids_count") or 0)
         self.extraction_errors.merge_metadata(metadata)
+        if not self._memory_ids_known:
+            return
+        if metadata.get("memory_ids_truncated"):
+            self._forget_memory_ids(truncated=True)
+            return
+        ids = metadata.get("memory_ids", _MISSING)
+        if ids is _MISSING or not isinstance(ids, list):
+            self._forget_memory_ids(truncated=False)
+            return
+        assert self.memory_ids is not None
+        self.memory_ids.extend(str(item) for item in ids)
+        if len(self.memory_ids) > MAX_RETAIN_RESULT_MEMORY_IDS:
+            self._forget_memory_ids(truncated=True)
+
+    def _forget_memory_ids(self, *, truncated: bool) -> None:
+        self._memory_ids_known = False
+        self.memory_ids = None
+        if truncated:
+            self.memory_ids_truncated = True
 
     def to_outcome_metadata(self) -> RetainOutcomeMetadata:
         """Return the aggregate in the public result_metadata field shape."""
@@ -139,7 +195,30 @@ class RetainOutcomeAggregate:
             unit_ids_count=self.unit_ids_count,
             extraction_errors_count=self.extraction_errors.count,
             extraction_errors_sample=self.extraction_errors.sample,
+            memory_ids=self.memory_ids if self._memory_ids_known else None,
+            memory_ids_truncated=self.memory_ids_truncated,
         )
+
+
+def reflect_result_payload(
+    data: Mapping[str, Any],
+    *,
+    include_based_on: bool,
+    include_trace: bool,
+) -> dict[str, Any]:
+    """The public reflect body stored on an async reflect operation.
+
+    Matches the MCP reflect tool: ``based_on`` and the trace fields are omitted
+    unless the caller asked for them. The stored object is what a finished
+    reflect returns, so the short wait and a later poll share one shape.
+    """
+    payload = dict(data)
+    if not include_based_on:
+        payload.pop("based_on", None)
+    if not include_trace:
+        for key in _REFLECT_TRACE_FIELDS:
+            payload.pop(key, None)
+    return payload
 
 
 @dataclass

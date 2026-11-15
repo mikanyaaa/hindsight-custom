@@ -1798,9 +1798,10 @@ class PostgreSQLOps(DataAccessOps):
     async def _claim_reserved_tasks(self, conn, table, limit, op_type) -> list:
         """Claim rows of one operation type against that type's reserved pool.
 
-        No bank rotation here: reservations are a floor for an operation *type*,
-        and every non-consolidation type defaults to 0 (``WORKER_SLOT_TYPE_DEFAULTS``),
-        so retains are claimed from the shared pool where the rotation lives. An
+        No bank rotation here: reservations are a floor for an operation *type*.
+        Consolidation reserves 2 and reflect reserves 1; every other type defaults
+        to 0 (``WORKER_SLOT_TYPE_DEFAULTS``), so retains are claimed from the
+        shared pool where the rotation lives. An
         operator who reserves the whole of ``WORKER_MAX_SLOTS`` by type leaves no
         shared pool for it to rotate in — deliberate, and the reason the defaults
         keep a shared pool.

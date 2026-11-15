@@ -119,7 +119,9 @@ def test_mcp_retain_leaves_the_strategy_on_the_item():
         "popping strategy off the content dict removes it from the item retain stores, "
         "so a later reprocess falls back to the bank default"
     )
-    assert src.count('strategy=content_dict.get("strategy")') == 4
+    # Two retain copies, plus the one helper both sync_retain copies call.
+    assert src.count('strategy=content_dict.get("strategy")') == 3
+    assert src.count("await _sync_retain_operation(") == 2
 
 
 class _StubEngine:

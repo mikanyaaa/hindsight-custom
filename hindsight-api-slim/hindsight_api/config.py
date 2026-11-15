@@ -1059,6 +1059,10 @@ ENV_OPERATION_CLEANUP_BATCH_SIZE = "HINDSIGHT_API_OPERATION_CLEANUP_BATCH_SIZE"
 # names are derived from it (see _parse_worker_slot_reservations).
 WORKER_SLOT_TYPE_DEFAULTS: dict[str, int] = {
     "consolidation": 2,
+    # Reflect is interactive: an MCP client is waiting on it. One reserved slot
+    # keeps a saturated consolidation or mental-model refresh from holding every
+    # worker slot. CUSTOM-HOOK async-mcp-reflect
+    "reflect": 1,
     "retain": 0,
     "file_convert_retain": 0,
     "refresh_mental_model": 0,
