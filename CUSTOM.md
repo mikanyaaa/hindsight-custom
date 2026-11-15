@@ -207,6 +207,9 @@ pages are 44px, and the remaining 10px and 11px type is 12px.
 
 With Playwright available, run `node tests/custom/theme/layering-browser.cjs` from
 `hindsight-control-plane/` for light/dark checks at 390, 768 and 1440px.
+`node tests/custom/pages/visual.cjs` opens every page at 390 and 1440, in light
+and dark, against fictional data. It is a local script: vitest does not launch
+it, and no GitHub Actions workflow runs it.
 
 | File                          | Marker names                                        | Purpose                                                         |
 | ----------------------------- | --------------------------------------------------- | --------------------------------------------------------------- |

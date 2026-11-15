@@ -554,8 +554,8 @@ export function KnowledgeBaseView() {
               become chips that filter the tree and the search alike. The sliders open
               the same filter against the raw endpoints. */}
           <div className="shrink-0 border-b border-border p-2 flex items-stretch gap-1">
-            <div className="relative flex-1 flex flex-wrap items-center gap-1 pl-7 pr-7 py-1 rounded-md bg-background border border-border focus-within:ring-1 focus-within:ring-primary">
-              <Search className="absolute left-2 top-2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+            <div className="relative flex min-h-11 flex-1 flex-wrap items-center gap-1 rounded-md border border-border bg-background py-1 pl-7 pr-2 focus-within:ring-1 focus-within:ring-primary">
+              <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               {(tagFilter.tags ?? []).map((tag) => (
                 <TagChip
                   key={tag}
@@ -571,7 +571,7 @@ export function KnowledgeBaseView() {
                 onKeyDown={onSearchKeyDown}
                 placeholder={tagFilter.tags?.length ? "" : t("searchPlaceholder")}
                 aria-label={t("searchPlaceholder")}
-                className="flex-1 min-w-[6rem] py-0.5 text-sm bg-transparent focus:outline-none"
+                className="min-h-11 min-w-[6rem] flex-1 bg-transparent py-0.5 text-sm focus:outline-none"
               />
               {(query || tagFilterActive) && (
                 <button
@@ -580,7 +580,7 @@ export function KnowledgeBaseView() {
                     // The whole filter: a kept `exact` would still filter (the untagged scope).
                     setTagFilter(DEFAULT_TAG_FILTER);
                   }}
-                  className="absolute right-1.5 top-1.5 rounded p-0.5 text-muted-foreground hover:text-foreground hover:bg-muted"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
                   aria-label={t("clearSearch")}
                 >
                   <X className="w-3.5 h-3.5" />
@@ -669,7 +669,7 @@ export function KnowledgeBaseView() {
           </div>
         </aside>
 
-        <main className="flex-1 min-w-0 overflow-y-auto bg-background">
+        <div className="flex-1 min-w-0 overflow-y-auto bg-background">
           {/* Editor tabs — open pages, click to focus, × to close. */}
           {tabs.length > 0 && (
             <div className="sticky top-0 z-10 flex items-stretch border-b border-border bg-muted overflow-x-auto">
@@ -852,7 +852,7 @@ export function KnowledgeBaseView() {
               </div>
             </div>
           )}
-        </main>
+        </div>
       </div>
 
       {/* Create folder/page dialog */}
