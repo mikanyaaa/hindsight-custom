@@ -17,6 +17,7 @@
     "@types/react-dom",
     "@vectorize-io/hindsight-client",
     "prettier",
+    "playwright",
     "tsx"
   ]
 }

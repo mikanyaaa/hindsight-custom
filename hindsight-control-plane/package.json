@@ -19,6 +19,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:browser": "node tests/custom/theme/theme-loads.cjs",
     "i18n:check": "tsx scripts/find-untranslated.ts",
     "prepublishOnly": "npm run build"
   },
@@ -81,6 +82,7 @@
     "@vectorize-io/hindsight-client": "file:../hindsight-clients/typescript",
     "jsdom": "^27.4.0",
     "prettier": "^3.7.4",
+    "playwright": "^1.56.1",
     "tsx": "^4.22.3",
     "vitest": "^4.1.12"
   }
