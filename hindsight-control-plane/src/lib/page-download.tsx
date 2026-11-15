@@ -35,14 +35,16 @@ export function downloadMarkdown({ name, body }: DownloadablePage) {
 
 // Margin boxes print the brand and page numbers on every sheet (Chromium; others
 // ignore them). print-color-adjust keeps the gradient bar and tag chips.
+// CUSTOM-HOOK: theme-quiet-paper-print begin
 const PRINT_CSS = `
 @page { margin: 16mm 16mm 18mm;
-  @bottom-left { content: "Hindsight"; font: 600 9px system-ui, sans-serif; color: #0074d9; }
+  @bottom-left { content: "Hindsight"; font: 600 9px system-ui, sans-serif; color: #5b47d6; }
   @bottom-right { content: counter(page) " / " counter(pages); font: 9px system-ui, sans-serif; color: #888; } }
 html, body { background: #fff !important; }
 body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 @media screen { body { padding: 32px 16px; } }
 `;
+// CUSTOM-HOOK: theme-quiet-paper-print end
 
 /** Render the page into a bare window with the app's stylesheets and open the
  *  browser's print dialog ("Save as PDF" makes the file). The window never gets
