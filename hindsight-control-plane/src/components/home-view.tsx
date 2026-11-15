@@ -14,19 +14,17 @@ import { formatRelativeTime, formatAbsoluteDateTime } from "@/lib/relative-time"
 import { MemoryStoreCard, MemoriesActivityChart, type BankStats } from "./bank-stats-view";
 import { TreeRow } from "./knowledge-base-view";
 import { useFeatures } from "@/lib/features-context";
+// CUSTOM-HOOK: theme-quiet-paper-graph-home begin
+import { GRAPH_FACT, GRAPH_NODE } from "@/custom/theme/graph-palette";
+// CUSTOM-HOOK: theme-quiet-paper-graph-home end
 
-const FALLBACK_COLOR = "#0074d9";
+const FALLBACK_COLOR = GRAPH_NODE;
 // The dashboard constellation is a glanceable memory map, not the full graph
 // explorer. Edge count grows super-linearly with nodes (≈1k nodes → ~67k edges,
 // ~22MB), so cap nodes here — the Memories view has the uncapped graph.
 const GRAPH_NODE_CAP = 200;
 // Cluster the memory constellation by fact type, matching the memories charts.
-const TYPE_COLORS: Record<string, string> = {
-  world: "#8b5cf6",
-  experience: "#ec4899",
-  observation: "#6366f1",
-  entity: "#0ea5e9",
-};
+const TYPE_COLORS: Record<string, string> = { ...GRAPH_FACT };
 
 // Documents have no standard name field (metadata is free-form and varies by
 // source), so recent-docs shows the document id.

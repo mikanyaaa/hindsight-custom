@@ -6,6 +6,9 @@ import { formatRelativeTime as formatLocaleRelativeTime } from "@/lib/relative-t
 // CUSTOM-HOOK: visible-poll-stats begin
 import { useVisiblePoll } from "@/custom/perf/use-visible-poll";
 // CUSTOM-HOOK: visible-poll-stats end
+// CUSTOM-HOOK: theme-quiet-paper-graph-stats begin
+import { GRAPH_LINK } from "@/custom/theme/graph-palette";
+// CUSTOM-HOOK: theme-quiet-paper-graph-stats end
 import Link from "next/link";
 import { useBank } from "@/lib/bank-context";
 import { bankRoute } from "@/lib/bank-url";
@@ -138,11 +141,11 @@ const CHART_COLORS = {
   world: "#8b5cf6", // violet-500
   experience: "#ec4899", // pink-500
   observation: "#6366f1", // indigo-500
-  // Link types — match the graph view exactly (data-view.tsx:215)
-  temporal: "#009296", // brand teal
-  semantic: "#0074d9", // brand blue
-  entity: "#f59e0b", // brand amber
-  causal: "#8b5cf6", // violet-500, matching the graph view
+  // Link types — the same colours as the memory graph.
+  temporal: GRAPH_LINK.temporal,
+  semantic: GRAPH_LINK.semantic,
+  entity: GRAPH_LINK.entity,
+  causal: GRAPH_LINK.causal,
   // Status
   success: "var(--chart-5)",
   warning: "var(--chart-4)",

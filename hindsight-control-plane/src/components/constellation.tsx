@@ -21,6 +21,16 @@ import {
   type CameraSnapshot,
 } from "@/custom/graph/frame";
 // CUSTOM-HOOK: graph-frame-import end
+// CUSTOM-HOOK: theme-quiet-paper-graph begin
+import {
+  GRAPH_LINK,
+  GRAPH_NODE,
+  graphFont,
+  graphMono,
+  graphPalette,
+  inkOn,
+} from "@/custom/theme/graph-palette";
+// CUSTOM-HOOK: theme-quiet-paper-graph end
 
 // ============================================================================
 // Types
@@ -228,26 +238,18 @@ function useIsDarkMode() {
 // Constants
 // ============================================================================
 
-const FONT_SMALL = '11px Inter, -apple-system, "Segoe UI", sans-serif';
-const FONT_BOLD = '600 10px Inter, -apple-system, "Segoe UI", sans-serif';
-const MONO = '11px "SF Mono", "Fira Code", Consolas, monospace';
-
-const LINK_TYPE_COLORS: Record<string, string> = {
-  semantic: "#0074d9",
-  temporal: "#009296",
-  entity: "#f59e0b",
-  causal: "#8b5cf6",
-};
-
-const DEFAULT_NODE_COLOR = "#0074d9";
+const LINK_TYPE_COLORS: Record<string, string> = { ...GRAPH_LINK };
+const DEFAULT_NODE_COLOR = GRAPH_NODE;
 
 function toolbarBtnStyle(isDark: boolean): CSSProperties {
+  const paint = graphPalette(isDark);
   return {
-    padding: "6px 10px",
-    borderRadius: 6,
-    border: `1px solid ${isDark ? "#27272a" : "#e4e4e7"}`,
-    background: isDark ? "#18181b" : "#ffffff",
-    color: isDark ? "#a1a1aa" : "#71717a",
+    padding: "6px 12px",
+    minHeight: 44,
+    borderRadius: 10,
+    border: `1px solid ${paint.border}`,
+    background: paint.card,
+    color: paint.muted,
     fontSize: 12,
     cursor: "pointer",
     display: "flex",
@@ -439,7 +441,7 @@ function NetworkConstellation({
       const nodeGroupList = nodeGroups ? nodeGroups[i] : [];
       const color = vennActive
         ? nodeGroupList.length > 1
-          ? "#94a3b8"
+          ? graphPalette(isDark).muted
           : groupColorFn?.(nodeGroupList[0]) || DEFAULT_NODE_COLOR
         : (ck != null && clusterColorFn?.(ck)) ||
           nodeColorFn?.(node) ||
@@ -578,6 +580,7 @@ function NetworkConstellation({
     nodeGroupsFn,
     groupColorFn,
     groupLabelFn,
+    isDark,
   ]);
 
   // Reuse the frame buffers until the node count changes instead of allocating
@@ -601,6 +604,7 @@ function NetworkConstellation({
     if (!ctx) return;
 
     const s = stateRef.current;
+    const paint = graphPalette(isDark);
     const frameStarted = typeof performance !== "undefined" ? performance.now() : 0;
 
     // Snap the final subpixel remainder so paused views can become truly idle.
@@ -639,7 +643,7 @@ function NetworkConstellation({
           ctx,
           snapshotRef.current,
           { W, H, dpr, panX, panY, zoom },
-          isDark ? "#09090b" : "#ffffff"
+          paint.background
         );
         clockRef.current.lastFrameMs = frameStarted;
         requestDrawRef.current();
@@ -655,7 +659,7 @@ function NetworkConstellation({
     ctx.save();
     ctx.scale(dpr, dpr);
 
-    const bg = isDark ? "#09090b" : "#ffffff";
+    const bg = paint.background;
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
 
@@ -871,7 +875,7 @@ function NetworkConstellation({
         // Label: a solid colored pill at the top of the circle (readable over dots).
         if (cluster.label && zoom > 0.15) {
           const label = cluster.label;
-          ctx.font = "600 11px ui-sans-serif, system-ui, sans-serif";
+          ctx.font = graphFont("600");
           const tw = ctx.measureText(label).width;
           const padX = 8;
           const pillH = 19;
@@ -887,7 +891,7 @@ function NetworkConstellation({
             ctx.rect(mx - pw / 2, ly - pillH / 2, pw, pillH);
           }
           ctx.fill();
-          ctx.fillStyle = "#ffffff";
+          ctx.fillStyle = inkOn(cluster.color);
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.fillText(label, mx, ly + 0.5);
@@ -1015,104 +1019,115 @@ function NetworkConstellation({
       }
     }
 
-    // HUD
-    ctx.font = MONO;
-    ctx.fillStyle = isDark ? "#71717a" : "#71717a";
+    // HUD. On a narrow graph the link legend sits above the counts so the
+    // two lines do not run into each other.
+    ctx.font = graphMono();
+    ctx.fillStyle = paint.muted;
     ctx.textAlign = "left";
-    ctx.fillText(
-      t("hudStats", {
-        memories: preparedNodes.length,
-        visible: visibleCount,
-        labels: labelsShown,
-        links: linksDrawn,
-        zoom: zoom.toFixed(2),
-      }),
-      12,
-      H - 12
-    );
-
-    // Legend — link types
-    ctx.textAlign = "right";
-    let legendX = W - 12;
-    ctx.font = FONT_BOLD;
+    const stats = t("hudStats", {
+      memories: preparedNodes.length,
+      visible: visibleCount,
+      labels: labelsShown,
+      links: linksDrawn,
+      zoom: zoom.toFixed(2),
+    });
+    const statsWidth = ctx.measureText(stats).width;
+    ctx.font = graphFont("600");
     const linkTypeLabel: Record<string, string> = {
       semantic: t("linkTypeSemantic"),
       temporal: t("linkTypeTemporal"),
       entity: t("linkTypeEntity"),
       causal: t("linkTypeCausal"),
     };
+    const legendWidth = Object.entries(LINK_TYPE_COLORS).reduce(
+      (sum, [type]) => sum + ctx.measureText(linkTypeLabel[type] ?? type).width + 18,
+      0
+    );
+    const legendY = statsWidth + legendWidth + 36 > W ? H - 32 : H - 12;
+    ctx.font = graphMono();
+    ctx.fillText(stats, 12, H - 12);
+
+    // Legend — link types
+    ctx.textAlign = "right";
+    let legendX = W - 12;
+    ctx.font = graphFont("600");
     for (const [type, color] of Object.entries(LINK_TYPE_COLORS).reverse()) {
       const label = linkTypeLabel[type] ?? type;
       const tw = ctx.measureText(label).width;
-      ctx.fillStyle = isDark ? "#a1a1aa" : "#52525b";
-      ctx.fillText(label, legendX, H - 12);
+      ctx.fillStyle = paint.muted;
+      ctx.fillText(label, legendX, legendY);
       legendX -= tw + 4;
       ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.arc(legendX, H - 15, 3, 0, Math.PI * 2);
+      ctx.arc(legendX, legendY - 3, 3, 0, Math.PI * 2);
       ctx.fill();
       legendX -= 14;
     }
 
     // Heat gradient legend (top-left, below instructions). Suppressed while
     // clustering, where node color encodes the cluster (scope), not the gradient.
+    // On a phone the toolbar occupies the top, so the legend starts beneath it.
+    const hudTop = W < 720 ? 48 : 0;
     if (clusters.length === 0) {
       ctx.textAlign = "left";
-      ctx.font = FONT_BOLD;
-      ctx.fillStyle = isDark ? "#a1a1aa" : "#52525b";
-      ctx.fillText((heatLegendLabel || t("legendLinks")).toUpperCase(), 12, 36);
+      ctx.font = graphFont("600");
+      ctx.fillStyle = paint.muted;
+      ctx.fillText((heatLegendLabel || t("legendLinks")).toUpperCase(), 12, 36 + hudTop);
       const [heatLo, heatHi] = heatLegendEndpoints || [t("legendFew"), t("legendMany")];
       // Size the bar so both endpoint labels fit without overlap (e.g. ISO dates
       // are wider than "few"/"many"). Min 80px keeps the visual weight stable.
-      ctx.font = MONO;
+      ctx.font = graphMono();
       const heatLoW = ctx.measureText(heatLo).width;
       const heatHiW = ctx.measureText(heatHi).width;
       const gradW = Math.max(80, heatLoW + heatHiW + 12);
       for (let gx = 0; gx < gradW; gx++) {
         ctx.fillStyle = heatColor(gx / gradW);
-        ctx.fillRect(12 + gx, 42, 1, 6);
+        ctx.fillRect(12 + gx, 42 + hudTop, 1, 6);
       }
-      ctx.fillStyle = isDark ? "#a1a1aa" : "#71717a";
-      ctx.fillText(heatLo, 12, 60);
+      ctx.fillStyle = paint.muted;
+      ctx.fillText(heatLo, 12, 60 + hudTop);
       ctx.textAlign = "right";
-      ctx.fillText(heatHi, 12 + gradW, 60);
+      ctx.fillText(heatHi, 12 + gradW, 60 + hudTop);
     }
 
     // Node-size legend — only shown when the caller maps size to a real dimension.
     // Layout: "few • • ● many" so the labels bracket the dots without overlap.
     if (sizeLegendLabel) {
       ctx.textAlign = "left";
-      ctx.font = FONT_BOLD;
-      ctx.fillStyle = isDark ? "#a1a1aa" : "#52525b";
-      ctx.fillText(sizeLegendLabel.toUpperCase(), 12, 82);
-      ctx.font = MONO;
-      const labelColor = isDark ? "#a1a1aa" : "#71717a";
+      ctx.font = graphFont("600");
+      ctx.fillStyle = paint.muted;
+      ctx.fillText(sizeLegendLabel.toUpperCase(), 12, 82 + hudTop);
+      ctx.font = graphMono();
+      const labelColor = paint.muted;
       ctx.fillStyle = labelColor;
       const sizeFew = t("legendFew");
       const sizeMany = t("legendMany");
-      ctx.fillText(sizeFew, 12, 98);
+      ctx.fillText(sizeFew, 12, 98 + hudTop);
       const fewW = ctx.measureText(sizeFew).width;
       const dotsStart = 12 + fewW + 8;
-      const dotColor = isDark ? "#a1a1aa" : "#52525b";
+      const dotColor = paint.muted;
       ctx.fillStyle = dotColor;
       ctx.beginPath();
-      ctx.arc(dotsStart + 2, 94, 2, 0, Math.PI * 2);
+      ctx.arc(dotsStart + 2, 94 + hudTop, 2, 0, Math.PI * 2);
       ctx.fill();
       ctx.beginPath();
-      ctx.arc(dotsStart + 14, 94, 4, 0, Math.PI * 2);
+      ctx.arc(dotsStart + 14, 94 + hudTop, 4, 0, Math.PI * 2);
       ctx.fill();
       ctx.beginPath();
-      ctx.arc(dotsStart + 30, 94, 6, 0, Math.PI * 2);
+      ctx.arc(dotsStart + 30, 94 + hudTop, 6, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = labelColor;
-      ctx.fillText(sizeMany, dotsStart + 42, 98);
+      ctx.fillText(sizeMany, dotsStart + 42, 98 + hudTop);
     }
 
-    // Instructions
-    ctx.textAlign = "left";
-    ctx.font = MONO;
-    ctx.fillStyle = isDark ? "#52525b" : "#a1a1aa";
-    ctx.fillText(t("instructions"), 12, 16);
+    // Instructions. The toolbar covers this corner on a phone, and the buttons
+    // already name what they do.
+    if (W >= 720) {
+      ctx.textAlign = "left";
+      ctx.font = graphMono();
+      ctx.fillStyle = paint.muted;
+      ctx.fillText(t("instructions"), 12, 16);
+    }
 
     ctx.restore();
 
@@ -1179,13 +1194,14 @@ function NetworkConstellation({
     dark: boolean,
     zoom: number
   ) {
+    const paint = graphPalette(dark);
     if (zoom > 1.5 || isHovered) {
       // Card mode
       const cardW = Math.min(220, 80 + zoom * 25);
       const textW = cardW - 16;
       // Most nodes never show a card. Prepare text lazily, and retain only the
       // latest width so ambient frames reuse wrapping without an unbounded cache.
-      n.prepared ??= prepareWithSegments(n.node.label || n.node.id.substring(0, 12), FONT_SMALL);
+      n.prepared ??= prepareWithSegments(n.node.label || n.node.id.substring(0, 12), graphFont());
       if (n.labelLayout?.width !== textW) {
         n.labelLayout = { width: textW, lines: layoutWithLines(n.prepared, textW, 15).lines };
       }
@@ -1198,18 +1214,12 @@ function NetworkConstellation({
       const cardX = sx - cardW / 2;
       const cardY = sy + r + 4;
 
-      ctx.fillStyle = isHovered
-        ? dark
-          ? "#1c1c1e"
-          : "#f4f4f5"
-        : dark
-          ? "rgba(9,9,11,0.92)"
-          : "rgba(255,255,255,0.92)";
+      ctx.fillStyle = isHovered ? paint.chip : paint.card;
       ctx.beginPath();
       ctx.roundRect(cardX, cardY, cardW, cardH, 6);
       ctx.fill();
 
-      ctx.strokeStyle = isHovered ? n.color : dark ? "rgba(63,63,70,0.5)" : "rgba(212,212,216,0.6)";
+      ctx.strokeStyle = isHovered ? n.color : paint.border;
       ctx.lineWidth = isHovered ? 1.5 : 0.5;
       ctx.beginPath();
       ctx.roundRect(cardX, cardY, cardW, cardH, 6);
@@ -1224,16 +1234,16 @@ function NetworkConstellation({
         ctx.shadowBlur = 0;
       }
 
-      ctx.font = FONT_SMALL;
-      ctx.fillStyle = isHovered ? (dark ? "#e4e4e7" : "#18181b") : dark ? "#71717a" : "#71717a";
+      ctx.font = graphFont();
+      ctx.fillStyle = isHovered ? paint.foreground : paint.muted;
       ctx.textAlign = "left";
       for (let j = 0; j < maxLines; j++) {
         ctx.fillText(lines[j].text, cardX + 8, cardY + 8 + j * 15 + 11);
       }
     } else {
       // Inline label
-      ctx.font = FONT_SMALL;
-      ctx.fillStyle = isHovered ? (dark ? "#e4e4e7" : "#18181b") : dark ? "#52525b" : "#a1a1aa";
+      ctx.font = graphFont();
+      ctx.fillStyle = isHovered ? paint.foreground : paint.muted;
       ctx.globalAlpha = isHovered ? 1 : force ? 0.85 : Math.min(1, (zoom - 0.3) * 2.5);
       ctx.textAlign = "left";
       const text = n.node.label || n.node.id.substring(0, 12);
@@ -1350,23 +1360,24 @@ function NetworkConstellation({
         const proofCount = meta?.proof_count || null;
         const documentId = meta?.document_id || null;
 
-        const muted = isDark ? "#a1a1aa" : "#71717a";
-        const dimmed = isDark ? "#71717a" : "#a1a1aa";
-        const labelStyle = `font-size:10px;color:${dimmed};text-transform:uppercase;letter-spacing:0.04em;font-weight:500`;
-        const valStyle = `font-size:12px;color:${isDark ? "#e4e4e7" : "#18181b"}`;
+        const tipPaint = graphPalette(isDark);
+        const muted = tipPaint.muted;
+        const dimmed = tipPaint.muted;
+        const labelStyle = `font-size:12px;color:${dimmed};text-transform:uppercase;letter-spacing:0.04em;font-weight:500`;
+        const valStyle = `font-size:12px;color:${tipPaint.foreground}`;
         const rowStyle = `display:flex;justify-content:space-between;align-items:baseline;gap:12px`;
 
         // Type badge + link count
         let html = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">`;
-        html += `<span style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:${nodeColor};background:${nodeColor}18;padding:2px 8px;border-radius:4px">${factType}</span>`;
-        html += `<span style="font-size:10px;color:${muted}">${linkCount} link${linkCount !== 1 ? "s" : ""}</span>`;
+        html += `<span style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:${nodeColor};background:${nodeColor}18;padding:2px 8px;border-radius:6px">${factType}</span>`;
+        html += `<span style="font-size:12px;color:${muted}">${linkCount} link${linkCount !== 1 ? "s" : ""}</span>`;
         html += `</div>`;
 
         // Text
         html += `<div style="font-size:12px;line-height:1.6;margin-bottom:8px">${fullText}</div>`;
 
         // Metadata grid
-        html += `<div style="display:flex;flex-direction:column;gap:4px;border-top:1px solid ${isDark ? "#27272a" : "#e4e4e7"};padding-top:8px">`;
+        html += `<div style="display:flex;flex-direction:column;gap:4px;border-top:1px solid ${tipPaint.border};padding-top:8px">`;
 
         if (context) {
           html += `<div style="${rowStyle}"><span style="${labelStyle}">Context</span><span style="${valStyle}">${context}</span></div>`;
@@ -1392,7 +1403,7 @@ function NetworkConstellation({
         }
 
         if (documentId) {
-          html += `<div style="${rowStyle}"><span style="${labelStyle}">Document</span><span style="font-size:11px;font-family:monospace;color:${muted}">${String(documentId).slice(0, 12)}...</span></div>`;
+          html += `<div style="${rowStyle}"><span style="${labelStyle}">Document</span><span style="font-size:12px;font-family:monospace;color:${muted}">${String(documentId).slice(0, 12)}...</span></div>`;
         }
 
         html += `</div>`;
@@ -1401,7 +1412,7 @@ function NetworkConstellation({
         if (entities.length > 0 && !(entities.length === 1 && entities[0] === "None")) {
           html += `<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px">`;
           for (const ent of entities) {
-            html += `<span style="font-size:10px;background:${isDark ? "#27272a" : "#f4f4f5"};color:${isDark ? "#d4d4d8" : "#3f3f46"};padding:2px 7px;border-radius:4px">${ent}</span>`;
+            html += `<span style="font-size:12px;background:${tipPaint.chip};color:${tipPaint.chipText};padding:2px 7px;border-radius:6px">${ent}</span>`;
           }
           html += `</div>`;
         }
@@ -1410,13 +1421,13 @@ function NetworkConstellation({
         if (tags.length > 0) {
           html += `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">`;
           for (const tag of tags) {
-            html += `<span style="font-size:10px;background:${nodeColor}15;color:${nodeColor};padding:2px 7px;border-radius:4px">#${tag}</span>`;
+            html += `<span style="font-size:12px;background:${nodeColor}15;color:${nodeColor};padding:2px 7px;border-radius:6px">#${tag}</span>`;
           }
           html += `</div>`;
         }
 
         // ID
-        html += `<div style="margin-top:8px;font-size:9px;font-family:monospace;color:${dimmed}">${node.id}</div>`;
+        html += `<div style="margin-top:8px;font-size:12px;font-family:monospace;color:${dimmed}">${node.id}</div>`;
 
         tip.innerHTML = html;
       }
@@ -1623,9 +1634,10 @@ function NetworkConstellation({
         sx[i] = ox + (preparedNodes[i].wx - cwx) * zoom;
         sy[i] = oy + (preparedNodes[i].wy - cwy) * zoom;
       }
-      // Always a dark "night sky" poster (matches the share aesthetic).
-      const navy = "#070b16";
-      const gridStroke = "#8ea3c8";
+      // The shared picture is the night surface, in either theme.
+      const poster = graphPalette(true);
+      const navy = poster.background;
+      const gridStroke = poster.muted;
 
       const parts: string[] = [];
       parts.push(
@@ -1636,9 +1648,9 @@ function NetworkConstellation({
       parts.push(
         `<defs>` +
           `<radialGradient id="hs-glow" cx="50%" cy="100%" r="62%">` +
-          `<stop offset="0" stop-color="#1d4ed8" stop-opacity="0.42"/>` +
-          `<stop offset="0.55" stop-color="#1e3a8a" stop-opacity="0.13"/>` +
-          `<stop offset="1" stop-color="#1e3a8a" stop-opacity="0"/>` +
+          `<stop offset="0" stop-color="${poster.accent}" stop-opacity="0.42"/>` +
+          `<stop offset="0.55" stop-color="${poster.accent}" stop-opacity="0.13"/>` +
+          `<stop offset="1" stop-color="${poster.accent}" stop-opacity="0"/>` +
           `</radialGradient>` +
           `<radialGradient id="hs-vignette" cx="50%" cy="46%" r="76%">` +
           `<stop offset="0" stop-color="#000000" stop-opacity="0"/>` +
@@ -1748,7 +1760,7 @@ function NetworkConstellation({
               position: "fixed",
               inset: 0,
               zIndex: 50,
-              background: isDark ? "#09090b" : "#ffffff",
+              background: graphPalette(isDark).background,
             }
           : { position: "relative", width: "100%", height: `${height}px` }
       }
@@ -1897,13 +1909,13 @@ function NetworkConstellation({
           zIndex: 22,
           maxWidth: 360,
           padding: "10px 14px",
-          borderRadius: 8,
+          borderRadius: 10,
           fontSize: 12,
           lineHeight: 1.5,
           boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
-          border: `1px solid ${isDark ? "#27272a" : "#e4e4e7"}`,
-          background: isDark ? "#18181b" : "#ffffff",
-          color: isDark ? "#e4e4e7" : "#18181b",
+          border: `1px solid ${graphPalette(isDark).border}`,
+          background: graphPalette(isDark).card,
+          color: graphPalette(isDark).foreground,
         }}
       />
     </div>

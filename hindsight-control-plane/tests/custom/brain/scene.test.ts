@@ -19,7 +19,7 @@ it("preserves the existing connectivity, recency and link colour scales", () => 
     "rgb(240, 100, 60)",
     "rgb(199, 118, 142)",
   ]);
-  expect(scene.links.map((link) => link.color)).toEqual(["#0074d9", "#0074d9"]);
+  expect(scene.links.map((link) => link.color)).toEqual(["#2c82f5", "#2c82f5"]);
   const recency = prepareBrainScene(
     { data, nodeHeatFn: () => 0.5, linkColorFn: () => "#123456" },
     renderer

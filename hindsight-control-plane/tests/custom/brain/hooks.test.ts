@@ -58,9 +58,10 @@ describe("CUSTOM.md source hook contract", () => {
     const register = readFileSync(new URL("../../../../CUSTOM.md", import.meta.url), "utf8");
     const hooks = checkHooks(sourceTree(root), register);
     expect(hooks.size).toBeGreaterThan(0);
+    // Brain dispatch, the frame budget, and the graph palette.
     expect(
       [...hooks.values()].filter((file) => file === "src/components/constellation.tsx").length
-    ).toBeLessThan(10);
+    ).toBeLessThan(11);
   });
   it("accepts valid paired hooks", () => {
     expect(checkHooks({ "src/example.ts": pair }, row).size).toBe(1);

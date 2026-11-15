@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import type { ConstellationProps } from "../../components/constellation";
+import { GRAPH_LINK } from "../theme/graph-palette";
 import styles from "./brain.module.css";
 
 /** Reflow the existing data semantics outside Canvas instead of clipping them on narrow screens. */
@@ -14,10 +15,10 @@ export function BrainLegend(props: ConstellationProps) {
       <ul className={styles.scopes}>
         {(
           [
-            ["#0074d9", t("linkTypeSemantic")],
-            ["#009296", t("linkTypeTemporal")],
-            ["#f59e0b", t("linkTypeEntity")],
-            ["#8b5cf6", t("linkTypeCausal")],
+            [GRAPH_LINK.semantic, t("linkTypeSemantic")],
+            [GRAPH_LINK.temporal, t("linkTypeTemporal")],
+            [GRAPH_LINK.entity, t("linkTypeEntity")],
+            [GRAPH_LINK.causal, t("linkTypeCausal")],
           ] as const
         ).map(([color, label]) => (
           <li key={label}>
