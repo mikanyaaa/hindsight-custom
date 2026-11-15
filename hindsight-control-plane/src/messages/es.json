@@ -717,6 +717,7 @@
       "all": "Todos los tipos",
       "retain": "Retener",
       "consolidation": "Consolidación",
+      "reflect": "Reflect",
       "refreshMentalModel": "Actualización del modelo mental",
       "fileConvertRetain": "Convertir archivo",
       "webhookDelivery": "Entrega de webhook",
