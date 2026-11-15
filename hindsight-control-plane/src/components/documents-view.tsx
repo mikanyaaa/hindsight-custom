@@ -2,6 +2,10 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslations, useLocale } from "next-intl";
+import { formatRelativeTime } from "@/lib/relative-time";
+// CUSTOM-HOOK: visible-poll-documents begin
+import { useVisiblePoll } from "@/custom/perf/use-visible-poll";
+// CUSTOM-HOOK: visible-poll-documents end
 import { toast } from "sonner";
 import { client, DocumentTimeField, LLMRequestEntry } from "@/lib/api";
 import {
@@ -104,28 +108,10 @@ const DOCUMENTS_REFRESH_EVENT = "hindsight:documents-refresh";
 // Debounce between a filter edit (search text, tags) and the list request.
 const FILTER_DEBOUNCE_MS = 250;
 
-function formatRelativeTime(dateStr: string): string {
-  const now = Date.now();
-  const then = new Date(dateStr).getTime();
-  const seconds = Math.floor((now - then) / 1000);
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  const months = Math.floor(days / 30);
-  if (months < 12) return `${months}mo ago`;
-  return `${Math.floor(months / 12)}y ago`;
-}
-
 // Live "Refreshed N seconds ago" label next to the documents count. It owns a
 // 1s ticker so only this label re-renders each second (not the whole table), and
 // uses Intl.RelativeTimeFormat with the active locale — no per-unit translation
-// keys needed. The list's own formatRelativeTime floors anything under a minute
-// to "just now", which is useless for an ~8s auto-refresh, so we format seconds
-// here directly.
+// keys needed.
 function LastRefreshedLabel({ at }: { at: number }) {
   const t = useTranslations("documentsView");
   const locale = useLocale();
@@ -713,6 +699,9 @@ function ChunkRow({ chunk, bankId }: { chunk: any; bankId: string }) {
 
 export function DocumentsView() {
   const t = useTranslations("documentsView");
+  // CUSTOM-HOOK: relative-time-documents begin
+  const locale = useLocale();
+  // CUSTOM-HOOK: relative-time-documents end
   const tCommon = useTranslations("common");
   const tBank = useTranslations("bank");
   const tApiError = useTranslations("api.errors.documents");
@@ -1217,27 +1206,16 @@ export function DocumentsView() {
   // pending uploads, and "Updating" badges all appear without a manual reload.
   // Refresh faster while something is actively in flight (uploads converting or a
   // document being rewritten), and on the gentler idle cadence otherwise.
-  useEffect(() => {
-    if (!currentBank) return;
-
-    const period =
-      hasActiveUploads || hasUpdatingDocs ? PENDING_POLL_INTERVAL_MS : DOCUMENTS_AUTO_REFRESH_MS;
-    const interval = window.setInterval(() => {
-      loadUpdatingOps();
-      loadPendingUploads();
-      loadDocuments(currentPage);
-    }, period);
-
-    return () => window.clearInterval(interval);
-  }, [
-    currentBank,
-    hasActiveUploads,
-    hasUpdatingDocs,
-    currentPage,
-    loadDocuments,
-    loadPendingUploads,
-    loadUpdatingOps,
-  ]);
+  const documentPollMs = !currentBank
+    ? null
+    : hasActiveUploads || hasUpdatingDocs
+      ? PENDING_POLL_INTERVAL_MS
+      : DOCUMENTS_AUTO_REFRESH_MS;
+  useVisiblePoll(() => {
+    loadUpdatingOps();
+    loadPendingUploads();
+    loadDocuments(currentPage);
+  }, documentPollMs);
 
   // Refresh immediately after an upload is submitted elsewhere (bank selector).
   useEffect(() => {
@@ -1693,7 +1671,7 @@ export function DocumentsView() {
                           <div className="mt-0.5 text-xs text-muted-foreground truncate">
                             {upload.filename ? `${upload.filename} · ` : ""}
                             <span title={new Date(upload.createdAt).toLocaleString()}>
-                              {formatRelativeTime(upload.createdAt)}
+                              {formatRelativeTime(upload.createdAt, locale)}
                             </span>
                           </div>
                         </div>
@@ -1794,7 +1772,7 @@ export function DocumentsView() {
                               <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
                                 {doc.updated_at ? (
                                   <span title={new Date(doc.updated_at).toLocaleString()}>
-                                    {t("colUpdated")} {formatRelativeTime(doc.updated_at)}
+                                    {t("colUpdated")} {formatRelativeTime(doc.updated_at, locale)}
                                   </span>
                                 ) : (
                                   "N/A"

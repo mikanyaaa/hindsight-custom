@@ -76,9 +76,17 @@ alert on: it never changes the status code, because a poller stalled behind a
 saturated database is the case where restarting makes things worse.
 
 **`/health` and `/health/ready`** acquire a pooled connection and run `SELECT 1`,
-returning 200 when the database is reachable and 503 when it is not. The payload
-separates the two ways that can go wrong — `db_acquire_ms` and `db_pool_waiting`
-point at pool exhaustion, a slow query at the database itself:
+returning 200 when the database is reachable and 503 when it is not. An anonymous
+caller receives only the status:
+
+```json
+{ "status": "ok", "service": "hindsight" }
+```
+
+A caller that presents a credential this process checks (the MCP bearer token, or
+a tenant extension that authenticates) also receives the diagnostics that separate
+the two ways a check can fail — `db_acquire_ms` and `db_pool_waiting` point at
+pool exhaustion, a slow query at the database itself:
 
 ```json
 { "status": "healthy", "database": "connected", "db_acquire_ms": 0.4, "db_pool_waiting": 0 }

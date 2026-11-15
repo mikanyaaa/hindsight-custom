@@ -20,6 +20,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("next-intl", () => ({
+  useLocale: () => "en",
   // Keys are echoed back; ICU arguments are appended so counts stay assertable.
   useTranslations: () => (key: string, values?: Record<string, unknown>) =>
     values ? `${key}:${Object.values(values).join(",")}` : key,

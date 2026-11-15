@@ -2,6 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslations } from "next-intl";
+// CUSTOM-HOOK: visible-poll-operations begin
+import { useVisiblePoll } from "@/custom/perf/use-visible-poll";
+// CUSTOM-HOOK: visible-poll-operations end
 import { toast } from "sonner";
 import { useBank } from "@/lib/bank-context";
 import { client, type OperationProgress } from "@/lib/api";
@@ -532,13 +535,15 @@ export function BankOperationsView() {
   useEffect(() => {
     if (currentBank) {
       loadOperations(statusFilter, offset, taskTypeFilter);
-      const interval = setInterval(
-        () => loadOperations(statusFilter, offset, taskTypeFilter),
-        hasProcessing ? 2000 : 5000
-      );
-      return () => clearInterval(interval);
     }
   }, [currentBank, statusFilter, offset, taskTypeFilter, hasProcessing, loadOperations]);
+
+  useVisiblePoll(
+    () => {
+      if (currentBank) loadOperations(statusFilter, offset, taskTypeFilter);
+    },
+    currentBank ? (hasProcessing ? 2000 : 5000) : null
+  );
 
   // Only tick the heartbeat clock while something is actually running — no point
   // re-rendering every second when every operation is in a terminal state.

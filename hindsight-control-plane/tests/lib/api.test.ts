@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
 import { ControlPlaneClient } from "@/lib/api";
+import { RequestTimeoutError } from "@/custom/client-guard/browser-fetch";
+import { resetGuardForTests } from "@/custom/client-guard/state";
 
 vi.mock("sonner", () => ({
   toast: {
@@ -106,6 +108,38 @@ describe("ControlPlaneClient error handling", () => {
         description: "HTTP 500",
       })
     );
+  });
+
+  it("does not report an upstream login page as a network error", async () => {
+    resetGuardForTests();
+    fetchSpy.mockResolvedValueOnce(
+      new Response("<html>login</html>", { status: 200, headers: { "content-type": "text/html" } })
+    );
+
+    await expect(client.getBankConfig("bank-a")).rejects.toMatchObject({ name: "SessionExpiredError" });
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("gives up after 20 seconds and does not toast a network error", async () => {
+    resetGuardForTests();
+    vi.useFakeTimers();
+    fetchSpy.mockImplementation(
+      (_url: string, init?: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            const error = new Error("aborted");
+            error.name = "AbortError";
+            reject(error);
+          });
+        })
+    );
+
+    const pending = client.getBankConfig("bank-a");
+    const assertion = expect(pending).rejects.toBeInstanceOf(RequestTimeoutError);
+    await vi.advanceTimersByTimeAsync(20_000);
+    await assertion;
+    expect(toast.error).not.toHaveBeenCalled();
+    vi.useRealTimers();
   });
 });
 

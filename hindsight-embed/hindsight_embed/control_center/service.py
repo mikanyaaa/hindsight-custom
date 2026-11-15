@@ -319,8 +319,12 @@ def health(name: str) -> HealthView:
     else:
         try:
             data = resp.json()
-            api_ok = data.get("status") == "healthy"
-            api_detail = f"{data.get('status', 'ok')} · db {data.get('database', '?')}"
+            status = data.get("status")
+            api_ok = status in ("healthy", "ok")
+            database = data.get("database")
+            api_detail = str(status or "ok")
+            if database:
+                api_detail = f"{api_detail} · db {database}"
         except Exception:
             api_ok, api_detail = True, "ok"
     return HealthView(api_ok=api_ok, api_detail=api_detail, ui_ok=daemon_client.is_ui_running(name))

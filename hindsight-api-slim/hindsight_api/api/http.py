@@ -29,6 +29,7 @@ from hindsight_api.api.admission import AdmissionAbandoned, AdmissionRejected, b
 from hindsight_api.api.disconnect import ClientDisconnectCancellationMiddleware, get_scope_cancellation_token
 from hindsight_api.api.observability import HttpObservabilityMiddleware
 from hindsight_api.api.passthrough_headers import collect_passthrough_headers
+from hindsight_api.api.public_health import diagnostics_allowed, is_ready, public_health_body
 from hindsight_api.api.unknown_params import UnknownParamsRoute, use_unknown_params_routes
 from hindsight_api.cancellation import OperationCancelledError
 from hindsight_api.engine import page_markdown
@@ -4841,11 +4842,20 @@ def _register_routes(app: FastAPI):
             headers={"Retry-After": str(getattr(exc, "retry_after", 30))},
         )
 
-    async def _readiness_response() -> JSONResponse:
-        """Shared body of /health and /health/ready: 200 if healthy, 503 if not."""
+    async def _readiness_response(request: Request) -> JSONResponse:
+        """Shared body of /health and /health/ready: 200 if healthy, 503 if not.
+
+        CUSTOM-HOOK: public-health-api
+        Anonymous callers get status only. Pool counters and error text require
+        a credential this process actually checks.
+        """
         health = await app.state.memory.health_check()
-        status_code = 200 if health.get("status") == "healthy" else 503
-        return JSONResponse(content=health, status_code=status_code)
+        ready = is_ready(health)
+        status_code = 200 if ready else 503
+        extension = getattr(app.state.memory, "_tenant_extension", None)
+        if await diagnostics_allowed(request.headers.get("authorization"), extension):
+            return JSONResponse(content=health, status_code=status_code)
+        return JSONResponse(content=public_health_body(ready, "hindsight").model_dump(), status_code=status_code)
 
     @app.get(
         "/health",
@@ -4856,13 +4866,13 @@ def _register_routes(app: FastAPI):
         "restart the process.",
         tags=["Monitoring"],
     )
-    async def health_endpoint():
+    async def health_endpoint(request: Request):
         """
         Health check endpoint that verifies database connectivity.
 
         Returns 200 if healthy, 503 if unhealthy.
         """
-        return await _readiness_response()
+        return await _readiness_response(request)
 
     @app.get(
         "/health/ready",
@@ -4872,14 +4882,14 @@ def _register_routes(app: FastAPI):
         tags=["Monitoring"],
         operation_id="get_readiness",
     )
-    async def readiness_endpoint():
+    async def readiness_endpoint(request: Request):
         """
         Readiness probe that verifies database connectivity.
 
         Returns 200 if ready, 503 if not. A 503 should remove this pod from the
         Service; it must not restart it.
         """
-        return await _readiness_response()
+        return await _readiness_response(request)
 
     @app.get(
         "/health/live",

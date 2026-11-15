@@ -2578,7 +2578,8 @@ Configuration for MCP server endpoints.
 | `HINDSIGHT_API_MCP_ENABLED` | Enable MCP server at `/mcp/{bank_id}/` | `true` |
 | `HINDSIGHT_API_MCP_ENABLED_TOOLS` | Comma-separated allowlist of MCP tools to expose globally (empty = all tools) | - |
 | `HINDSIGHT_API_MCP_STATELESS` | Use stateless HTTP transport (POST-only). When `false`, enables stateful mode with GET/SSE support for server-initiated messages | `false` |
-| `HINDSIGHT_API_MCP_AUTH_TOKEN` | Bearer token for MCP authentication (optional) | - |
+| `HINDSIGHT_API_MCP_AUTH_TOKEN` | Bearer token for MCP authentication. Required unless a tenant extension authenticates callers, or local development sets `HINDSIGHT_API_MCP_ALLOW_UNAUTHENTICATED=true`. | - |
+| `HINDSIGHT_API_MCP_ALLOW_UNAUTHENTICATED` | Allow MCP requests when no token is configured and the tenant extension does not authenticate. Only the value `true` opts in. | `false` |
 | `HINDSIGHT_API_MCP_LOCAL_BANK_ID` | Memory bank ID for local MCP | `mcp` |
 | `HINDSIGHT_API_MCP_INSTRUCTIONS` | Additional instructions appended to retain/recall tool descriptions | - |
 
@@ -2609,7 +2610,7 @@ When a bank-level `mcp_enabled_tools` is set, tools not in the list return a cle
 
 **MCP Authentication:**
 
-By default, the MCP endpoint is open. For production deployments, set `HINDSIGHT_API_MCP_AUTH_TOKEN` to require Bearer token authentication:
+The MCP endpoint rejects requests that do not present a credential this process checks. Set `HINDSIGHT_API_MCP_AUTH_TOKEN` to require that Bearer token, or configure a tenant extension that authenticates callers. For local development only, opt out with `HINDSIGHT_API_MCP_ALLOW_UNAUTHENTICATED=true`:
 
 ```bash
 export HINDSIGHT_API_MCP_AUTH_TOKEN=your-secret-token
@@ -2904,8 +2905,8 @@ you with an opaque restart.
 
 The DB-pool acquire path also exposes `hindsight_db_pool_waiting` (callers currently
 queued for a connection) and the `hindsight_db_pool_acquire_wait` histogram. A slow
-or failing `/health` response additionally carries `db_acquire_ms`, `db_pool_waiting`,
-`db_pool_in_use`, and `db_pool_max` for triage.
+or failing authenticated `/health` response additionally carries `db_acquire_ms`, `db_pool_waiting`,
+`db_pool_in_use`, and `db_pool_max` for triage. Anonymous probes receive only `status` and `service`.
 
 ### CPU Profiling
 
@@ -2986,7 +2987,8 @@ The Control Plane is the web UI for managing memory banks.
 |----------|-------------|---------|
 | `HINDSIGHT_CP_DATAPLANE_API_URL` | URL of the API service | `http://localhost:8888` |
 | `HINDSIGHT_CP_DATAPLANE_API_KEY` | Bearer token the Control Plane sends as `Authorization: Bearer <key>` on every request to the API service. Required when the API service is auth-protected; omit for a public API. | *(none — no `Authorization` header sent)* |
-| `HINDSIGHT_CP_ACCESS_KEY` | Access key to protect the Control Plane UI. When set, users must enter this key to log in. | *(none — auth disabled)* |
+| `HINDSIGHT_CP_ACCESS_KEY` | Access key to protect the Control Plane UI. Required unless local development sets `HINDSIGHT_CP_ALLOW_UNAUTHENTICATED=true`. An empty value refuses protected routes. | *(unset — protected routes refused)* |
+| `HINDSIGHT_CP_ALLOW_UNAUTHENTICATED` | Allow the Control Plane without an access key. Only the value `true` opts in, for local development. | `false` |
 | `HINDSIGHT_CP_MAX_UPLOAD_SIZE` | Maximum size of a single file-upload request the Control Plane accepts before truncating it. Accepts a size string (`100mb`, `1gb`) or a number of bytes. Raise this to upload files larger than the default, and keep it in line with the API's `HINDSIGHT_API_FILE_CONVERSION_MAX_BATCH_SIZE_MB`. | `100mb` |
 | `NEXT_PUBLIC_BASE_PATH` | Base path for Control Plane UI when behind reverse proxy (e.g., `/hindsight`) | `""` (root) |
 
@@ -2999,6 +3001,9 @@ export HINDSIGHT_CP_DATAPLANE_API_KEY=my-dataplane-bearer-token
 
 # Protect the Control Plane with an access key
 export HINDSIGHT_CP_ACCESS_KEY=my-secret-key
+
+# Local development only: run the Control Plane with no access key
+# export HINDSIGHT_CP_ALLOW_UNAUTHENTICATED=true
 ```
 
 ### Hierarchical Configuration

@@ -15,6 +15,9 @@ import { THEME_COOKIE, THEME_INIT_SCRIPT, themeFromCookie } from "@/custom/theme
 import { SIDEBAR_COOKIE, sidebarCollapsedFromCookie } from "@/custom/frame/sidebar-state";
 import { SidebarCollapsedProvider } from "@/custom/frame/sidebar-provider";
 // CUSTOM-HOOK: frame-quiet-paper-seed end
+// CUSTOM-HOOK: client-guard-entry begin
+import { ClientGuard } from "@/custom/client-guard/gate";
+// CUSTOM-HOOK: client-guard-entry end
 
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
@@ -54,7 +57,12 @@ export default async function LocaleLayout({
           <ThemeProvider initialTheme={storedTheme ?? "light"}>
             <FeaturesProvider>
               <BankProvider>
-                <NextIntlClientProvider>{children}</NextIntlClientProvider>
+                <NextIntlClientProvider>
+                  {children}
+                  {/* CUSTOM-HOOK: client-guard-mount begin */}
+                  <ClientGuard />
+                  {/* CUSTOM-HOOK: client-guard-mount end */}
+                </NextIntlClientProvider>
               </BankProvider>
             </FeaturesProvider>
           </ThemeProvider>

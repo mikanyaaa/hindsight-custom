@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { client, type TagGroup, type TagsMatch } from "@/lib/api";
 import { formatAbsoluteDateTime, formatRelativeTime } from "@/lib/relative-time";
 import { CompactMarkdown } from "./compact-markdown";
@@ -1118,6 +1118,9 @@ function FilesView({
   onDelete: (m: MentalModel) => void;
 }) {
   const t = useTranslations("mentalModels");
+  // CUSTOM-HOOK: relative-time-models begin
+  const locale = useLocale();
+  // CUSTOM-HOOK: relative-time-models end
   const effectiveId =
     selectedId && mentalModels.some((m) => m.id === selectedId)
       ? selectedId
@@ -1161,7 +1164,7 @@ function FilesView({
                         className="text-[10px] text-muted-foreground flex-shrink-0"
                         title={formatAbsoluteDateTime(m.last_refreshed_at)}
                       >
-                        {formatRelativeTime(m.last_refreshed_at)}
+                        {formatRelativeTime(m.last_refreshed_at, locale)}
                       </span>
                     </div>
                     {m.source_query && (

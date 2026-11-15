@@ -133,7 +133,7 @@ def test_api_health_and_ready_return_the_same_payload():
     ready = client.get("/health/ready")
 
     assert health.status_code == ready.status_code == 200
-    assert health.json() == ready.json()
+    assert health.json() == ready.json() == {"status": "ok", "service": "hindsight"}
 
 
 def test_worker_health_and_ready_return_the_same_payload():
@@ -143,7 +143,35 @@ def test_worker_health_and_ready_return_the_same_payload():
     ready = client.get("/health/ready")
 
     assert health.status_code == ready.status_code == 200
-    assert health.json() == ready.json() == {**_DB_UP, "worker_id": "w-test", "is_shutdown": False}
+    assert health.json() == ready.json() == {"status": "ok", "service": "hindsight-worker"}
+
+
+def test_public_health_omits_pool_diagnostics():
+    client, _ = _api_client({**_DB_UP, "db_pool_in_use": 3, "db_pool_max": 10, "error": "secret"})
+
+    body = client.get("/health").json()
+
+    assert body == {"status": "ok", "service": "hindsight"}
+    assert "db_pool_in_use" not in body
+    assert "error" not in body
+    assert "database" not in body
+
+
+def test_authorized_health_includes_diagnostics(monkeypatch):
+    from hindsight_api.api import public_health
+
+    class _Config:
+        mcp_auth_token = "synthetic-health-token"
+
+    monkeypatch.setattr(public_health, "get_config", lambda: _Config())
+    client, _ = _api_client(_DB_UP)
+
+    denied = client.get("/health", headers={"Authorization": "Bearer wrong-token"})
+    allowed = client.get("/health", headers={"Authorization": "Bearer synthetic-health-token"})
+
+    assert denied.json() == {"status": "ok", "service": "hindsight"}
+    assert allowed.json()["database"] == "connected"
+    assert allowed.json()["db_acquire_ms"] == 0.4
 
 
 # ---------------------------------------------------------------------------

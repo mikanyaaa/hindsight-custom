@@ -27,16 +27,24 @@ export HINDSIGHT_API_MCP_ENABLED=false
 
 ## Authentication
 
-By default, the MCP endpoint is **open** (no authentication required).
+The MCP endpoint rejects a request that does not present a credential checked in this process. A sessionless GET probe is included: it answers only after authentication.
 
-To enable authentication, configure the API key tenant extension:
+Set a bearer token:
+
+```bash
+export HINDSIGHT_API_MCP_AUTH_TOKEN=your-secret-token
+```
+
+Or configure the API key tenant extension:
 
 ```bash
 export HINDSIGHT_API_TENANT_EXTENSION=hindsight_api.extensions.builtin.tenant:ApiKeyTenantExtension
 export HINDSIGHT_API_TENANT_API_KEY=your-secret-key
 ```
 
-When authentication is enabled, include your API key in the `Authorization` header:
+For local development without a credential, set `HINDSIGHT_API_MCP_ALLOW_UNAUTHENTICATED=true`. Any other value keeps the endpoint closed.
+
+Include the credential in the `Authorization` header:
 
 ### Claude Code
 

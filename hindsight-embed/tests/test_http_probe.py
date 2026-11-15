@@ -94,6 +94,10 @@ class TestPortHealthOk:
         with serve(reply(200, {"status": "healthy", "database": "connected"})) as stub:
             assert DaemonEmbedManager._port_health_ok(stub.port) is True
 
+    def test_public_health_without_pool_details(self):
+        with serve(reply(200, {"status": "ok", "service": "hindsight"})) as stub:
+            assert DaemonEmbedManager._port_health_ok(stub.port) is True
+
     @pytest.mark.parametrize(
         "handler",
         [

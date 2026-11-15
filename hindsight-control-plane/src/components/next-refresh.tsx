@@ -1,6 +1,6 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { nextCronRun } from "@/lib/cron";
 import { formatRelativeTime } from "@/lib/relative-time";
 
@@ -31,6 +31,9 @@ export function NextRefresh({
   className?: string;
 }) {
   const t = useTranslations("mentalModels");
+  // CUSTOM-HOOK: relative-time-next begin
+  const locale = useLocale();
+  // CUSTOM-HOOK: relative-time-next end
   const cron = trigger?.refresh_cron?.trim();
 
   // An attempt that has not finished outranks everything else: the failure stamp
@@ -40,7 +43,7 @@ export function NextRefresh({
     return (
       <span className={className}>
         {attempt.nextAttemptAt
-          ? t("nextRefreshRetrying", { time: formatRelativeTime(attempt.nextAttemptAt) })
+          ? t("nextRefreshRetrying", { time: formatRelativeTime(attempt.nextAttemptAt, locale) })
           : t("nextRefreshRunning")}
       </span>
     );
@@ -63,7 +66,7 @@ export function NextRefresh({
     });
     return (
       <span className={className} title={`${utc} UTC`}>
-        {formatRelativeTime(next.toISOString())}
+        {formatRelativeTime(next.toISOString(), locale)}
       </span>
     );
   }

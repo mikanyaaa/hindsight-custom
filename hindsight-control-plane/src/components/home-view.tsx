@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { client, type KnowledgeNode } from "@/lib/api";
 import { bankRoute } from "@/lib/bank-url";
 import { Constellation } from "./constellation";
@@ -56,6 +56,9 @@ export function HomeView({
   onNavigate: (tab: string) => void;
 }) {
   const t = useTranslations("home");
+  // CUSTOM-HOOK: relative-time-home begin
+  const locale = useLocale();
+  // CUSTOM-HOOK: relative-time-home end
   const tk = useTranslations("knowledgeBase");
   const router = useRouter();
   const { features } = useFeatures();
@@ -302,7 +305,7 @@ export function HomeView({
                           className="text-[11px] text-muted-foreground flex-shrink-0"
                           title={formatAbsoluteDateTime(d.created_at)}
                         >
-                          {formatRelativeTime(d.created_at)}
+                          {formatRelativeTime(d.created_at, locale)}
                         </span>
                       )}
                     </button>

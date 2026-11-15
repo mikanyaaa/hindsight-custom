@@ -39,4 +39,56 @@ describe("middleware session handling", () => {
     const res = await request("/login", false);
     expect(res.headers.get("location")).toBeNull();
   });
+
+  it.each(["/api/healthXYZ", "/api/health/extra", "/api/auth-evil"])(
+    "does not treat %s as a public API path",
+    async (path) => {
+      const res = await request(path, false);
+      expect(res.status).toBe(401);
+    }
+  );
+
+  it.each(["/login-evil", "/favicon-evil"])(
+    "does not treat %s as a public page",
+    async (path) => {
+      const res = await request(path, false);
+      expect(res.status).toBe(307);
+      expect(res.headers.get("location")).toContain("/login");
+    }
+  );
+
+  it("allows the health route and a real auth subpath", async () => {
+    expect((await request("/api/health", false)).status).not.toBe(401);
+    expect((await request("/api/auth/login", false)).status).not.toBe(401);
+  });
+});
+
+describe("middleware without an access key", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("refuses a protected route and names the missing variable", async () => {
+    vi.stubEnv("HINDSIGHT_CP_ACCESS_KEY", "   ");
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await request("/api/banks", false);
+    expect(res.status).toBe(503);
+    expect(await res.json()).toMatchObject({ error: "Access key not configured" });
+    const logged = error.mock.calls.map((call) => call.join(" ")).join("\n");
+    expect(logged).toContain("HINDSIGHT_CP_ACCESS_KEY");
+    expect(logged).not.toContain("super-secret");
+    error.mockRestore();
+  });
+
+  it("keeps the public health route available", async () => {
+    vi.stubEnv("HINDSIGHT_CP_ACCESS_KEY", "");
+    const res = await request("/api/health", false);
+    expect(res.status).not.toBe(503);
+  });
+
+  it("allows protected routes when the local opt-out is set", async () => {
+    vi.stubEnv("HINDSIGHT_CP_ACCESS_KEY", "");
+    vi.stubEnv("HINDSIGHT_CP_ALLOW_UNAUTHENTICATED", "true");
+    const res = await request("/api/banks", false);
+    expect(res.status).not.toBe(503);
+    expect(res.status).not.toBe(401);
+  });
 });

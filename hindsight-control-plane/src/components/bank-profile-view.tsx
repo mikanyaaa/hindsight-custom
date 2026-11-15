@@ -2,6 +2,9 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
+// CUSTOM-HOOK: visible-poll-profile begin
+import { useVisiblePoll } from "@/custom/perf/use-visible-poll";
+// CUSTOM-HOOK: visible-poll-profile end
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useRouter } from "next/navigation";
@@ -247,13 +250,16 @@ export function BankProfileView({ hideReflectFields = false }: { hideReflectFiel
   };
 
   useEffect(() => {
-    if (currentBank) {
-      loadData();
-      // Refresh read-only profile data every 5 seconds without overwriting form state.
-      const interval = setInterval(() => loadData(true), 5000);
-      return () => clearInterval(interval);
-    }
+    if (currentBank) loadData();
   }, [currentBank]);
+
+  // Refresh read-only profile data every 5 seconds without overwriting form state.
+  useVisiblePoll(
+    () => {
+      if (currentBank) void loadData(true);
+    },
+    currentBank ? 5000 : null
+  );
 
   // Close directive detail panel on Escape
   useEffect(() => {

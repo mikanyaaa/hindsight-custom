@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Trash2, Search, X, Plus } from "lucide-react";
 import { toast } from "sonner";
 
@@ -84,6 +84,9 @@ interface DeleteProgress {
 
 export function BanksOverview() {
   const t = useTranslations("banksOverview");
+  // CUSTOM-HOOK: relative-time-banks begin
+  const locale = useLocale();
+  // CUSTOM-HOOK: relative-time-banks end
   const tCommon = useTranslations("common");
   const tNavBank = useTranslations("nav.bank");
   const router = useRouter();
@@ -384,10 +387,10 @@ export function BanksOverview() {
                       )}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {lastActivity ? formatRelativeTime(lastActivity) : t("never")}
+                      {lastActivity ? formatRelativeTime(lastActivity, locale) : t("never")}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {bank.created_at ? formatRelativeTime(bank.created_at) : "—"}
+                      {bank.created_at ? formatRelativeTime(bank.created_at, locale) : "—"}
                     </TableCell>
                   </TableRow>
                 );
