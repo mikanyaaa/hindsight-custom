@@ -1,0 +1,236 @@
+/* Quiet Paper / Night Desk. One token set for both themes.
+   Surfaces, accent, radii and the type scale are defined here and nowhere else.
+   Imported from globals.css so Tailwind merges the theme and the first paint
+   already has these colors. A client-side import would flash the old palette. */
+
+:root {
+  --background: #faf9f7;
+  --foreground: #1c1b19;
+  --card: #ffffff;
+  --card-foreground: #1c1b19;
+  --popover: #ffffff;
+  --popover-foreground: #1c1b19;
+  --primary: #5b47d6;
+  --primary-foreground: #ffffff;
+  --primary-gradient: var(--primary);
+  --secondary: #f1efea;
+  --secondary-foreground: #1c1b19;
+  --muted: #f1efea;
+  --muted-foreground: #5e584f;
+  --accent: #e7e3f6;
+  --accent-foreground: #1c1b19;
+  --destructive: #b42318;
+  --destructive-foreground: #ffffff;
+  --border: rgba(28, 27, 25, 0.12);
+  --input: rgba(28, 27, 25, 0.12);
+  --ring: #5b47d6;
+  --chart-1: #2c82f5;
+  --chart-2: #10b981;
+  --chart-3: #8b5cf6;
+  --chart-4: #f59e0b;
+  --chart-5: #ec4899;
+
+  /* Chips stay one family: paper neutrals, with the accent only on an active filter. */
+  --chip-tag: #f1efea;
+  --chip-tag-border: #e0dcd4;
+  --chip-entity: #eeeaf8;
+  --chip-entity-border: #ddd6f5;
+  --chip-meta: #f6f5f2;
+  --chip-meta-border: #e7e4de;
+  --chip-fg: #3c3844;
+  --chip-accent: #5b47d6;
+
+  --sidebar: #ffffff;
+  --sidebar-foreground: #5e584f;
+  --sidebar-primary: #5b47d6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e7e3f6;
+  --sidebar-accent-foreground: #1c1b19;
+  --sidebar-border: rgba(28, 27, 25, 0.08);
+  --sidebar-ring: #5b47d6;
+
+  --radius: 10px;
+
+  /* Former --hs-* names are aliases, not a second palette. */
+  --hs-surface-page: var(--background);
+  --hs-surface-card: var(--card);
+  --hs-surface-sidebar: var(--sidebar);
+  --hs-surface-hover: var(--muted);
+  --hs-surface-muted: var(--muted);
+  --hs-fg-primary: var(--foreground);
+  --hs-fg-muted: var(--muted-foreground);
+  --hs-fg-on-accent: var(--primary-foreground);
+  --hs-border-default: var(--border);
+  --hs-border-subtle: var(--sidebar-border);
+  --hs-success: #067647;
+  --hs-warning: #b54708;
+  --hs-danger: var(--destructive);
+  --hs-info: var(--primary);
+  --hs-neutral: var(--muted-foreground);
+  --hs-brand-blue: var(--primary);
+  --hs-brand-teal: var(--primary);
+  --hs-chart-world: var(--chart-1);
+  --hs-chart-experience: var(--chart-2);
+  --hs-chart-observations: var(--chart-3);
+  --hs-chart-temporal: var(--chart-4);
+  --hs-chart-semantic: #009296;
+  --hs-chart-entity: var(--chart-5);
+
+  color-scheme: light;
+}
+
+.dark {
+  --background: #0e0e11;
+  --foreground: #f3f1ea;
+  --card: #18181c;
+  --card-foreground: #f3f1ea;
+  --popover: #1e1e24;
+  --popover-foreground: #f3f1ea;
+  --primary: #a699ff;
+  --primary-foreground: #1c1b19;
+  --primary-gradient: var(--primary);
+  --secondary: #26262c;
+  --secondary-foreground: #f3f1ea;
+  --muted: #26262c;
+  --muted-foreground: #b7b1a6;
+  --accent: #2e2a40;
+  --accent-foreground: #f3f1ea;
+  /* Light enough to read on the night surface, dark text on the fill.
+     A single red cannot be 4.5:1 with both white and #0E0E11. */
+  --destructive: #e88984;
+  --destructive-foreground: #1c1b19;
+  --border: rgba(243, 241, 234, 0.14);
+  --input: rgba(243, 241, 234, 0.14);
+  --ring: #a699ff;
+  --chart-1: #2c82f5;
+  --chart-2: #10b981;
+  --chart-3: #8b5cf6;
+  --chart-4: #f59e0b;
+  --chart-5: #ec4899;
+
+  --chip-tag: #2a2926;
+  --chip-tag-border: #3d3b36;
+  --chip-entity: #2c2836;
+  --chip-entity-border: #433e52;
+  --chip-meta: #1c1c20;
+  --chip-meta-border: #32323a;
+  --chip-fg: #e6e1f4;
+  --chip-accent: #a699ff;
+
+  --sidebar: #121216;
+  --sidebar-foreground: #b7b1a6;
+  --sidebar-primary: #a699ff;
+  --sidebar-primary-foreground: #1c1b19;
+  --sidebar-accent: #2e2a40;
+  --sidebar-accent-foreground: #f3f1ea;
+  --sidebar-border: rgba(243, 241, 234, 0.1);
+  --sidebar-ring: #a699ff;
+
+  --hs-success: #5ee0a8;
+  --hs-warning: #f5c16c;
+  --hs-danger: var(--destructive);
+  --hs-neutral: var(--muted-foreground);
+
+  color-scheme: dark;
+}
+
+@theme inline {
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 14px;
+  --radius-2xl: 14px;
+  --radius-3xl: 14px;
+  --radius-4xl: 14px;
+
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.45;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.45;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.4;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.35;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 1.3;
+  --text-3xl: 2rem;
+  --text-3xl--line-height: 1.2;
+  --text-4xl: 2rem;
+  --text-4xl--line-height: 1.15;
+  --text-5xl: 2rem;
+  --text-5xl--line-height: 1.1;
+  --text-6xl: 2rem;
+  --text-6xl--line-height: 1.1;
+  --text-7xl: 2rem;
+  --text-7xl--line-height: 1.05;
+  --text-8xl: 2rem;
+  --text-8xl--line-height: 1.05;
+  --text-9xl: 2rem;
+  --text-9xl--line-height: 1;
+}
+
+/* Paper surface, a 4% accent glow, and a tiled grain. No photograph. */
+html {
+  background-color: var(--background);
+  background-image:
+    radial-gradient(
+      ellipse 90% 50% at 50% -10%,
+      color-mix(in srgb, var(--primary) 4%, transparent),
+      transparent 60%
+    ),
+    url("./grain.png");
+  background-repeat: no-repeat, repeat;
+  background-size:
+    100% 70vh,
+    128px 128px;
+}
+
+body {
+  background-color: transparent;
+  background-image: none;
+}
+
+/* Filled accent controls use the accent foreground, including ones that
+   still say text-white. White on #A699FF fails WCAG AA. */
+.bg-primary-gradient {
+  color: var(--primary-foreground);
+}
+
+[data-slot="hs-switch"][data-state="unchecked"] {
+  background-color: #d6d2cb;
+}
+.dark [data-slot="hs-switch"][data-state="unchecked"] {
+  background-color: #3c3c44;
+}
+
+/* Glass is only for floating layers. The page shell stays sharp. */
+html :is(main, aside) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+html :is([role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]),
+html [data-radix-popper-content-wrapper] > * {
+  background-color: color-mix(in srgb, var(--popover) 86%, transparent);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  html :is([role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]),
+  html [data-radix-popper-content-wrapper] > * {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background-color: var(--popover);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html :is([role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]),
+  html [data-radix-popper-content-wrapper] > * {
+    transition: none;
+    animation: none;
+  }
+}

@@ -132,33 +132,22 @@ const assert = require("node:assert/strict");
     page.on("request", (r) => requests.push(r.url()));
     await page.goto(`${baseUrl}/en/banks/atlas`, { waitUntil: "networkidle", timeout: 120000 });
     await page.waitForTimeout(800);
-    const enabled = process.env.THEME === "true";
+    assert.equal(await page.locator("html").getAttribute("data-theme"), "quiet-paper");
+    assert.equal(await page.locator("html").getAttribute("data-theme-layer"), null);
+    assert.equal(await page.locator("[data-home-layout]").count(), 0);
     assert.equal(
-      await page.locator("html").getAttribute("data-theme-layer"),
-      enabled ? "warm-glass" : null
+      requests.some((u) => /lofi-city|feTurbulence/.test(u)),
+      false
     );
-    const homeEnabled = process.env.HOME_PANELS === "true";
-    if (homeEnabled) await page.locator('[data-home-layout="warm-glass"]').waitFor();
-    else assert.equal(await page.locator("[data-home-layout]").count(), 0);
-    if (!enabled) {
-      assert.equal(
-        requests.some((u) => /lofi-city/.test(u)),
-        false
-      );
-      const css = await page.evaluate(() =>
-        [...document.styleSheets]
-          .flatMap((s) => {
-            try {
-              return [...s.cssRules].map((r) => r.cssText);
-            } catch {
-              return [];
-            }
-          })
-          .join("\n")
-      );
-      assert.equal(css.includes('data-theme-layer="warm-glass"'), false);
-      if (!homeEnabled) assert.equal(css.includes('data-home-layout="warm-glass"'), false);
-    }
+    const painted = await page.evaluate(() => ({
+      primary: getComputedStyle(document.documentElement).getPropertyValue("--primary").trim(),
+      main: getComputedStyle(document.querySelector("main")).backdropFilter,
+      aside: getComputedStyle(document.querySelector("aside")).backdropFilter,
+    }));
+    const dark = await page.evaluate(() => document.documentElement.classList.contains("dark"));
+    assert.equal(painted.primary, dark ? "#a699ff" : "#5b47d6");
+    assert.equal(painted.main, "none");
+    assert.equal(painted.aside, "none");
     if (process.env.SIDEBAR === "true") {
       assert.equal(await page.locator('aside a[aria-current="page"]').count(), 1);
       assert.equal(await page.locator("aside a[aria-label]").count(), 8);
@@ -218,48 +207,8 @@ const assert = require("node:assert/strict");
         await page.screenshot({ path: `${output}/${scheme}-${width}.png` });
       }
     }
-    if (enabled) {
-      assert.match(
-        await page.locator("aside").evaluate((el) => getComputedStyle(el).backdropFilter),
-        /blur/
-      );
-      assert.match(
-        await page
-          .locator("main")
-          .evaluate((el) => getComputedStyle(el, "::before").backdropFilter),
-        /blur/
-      );
-      assert.match(
-        await page.locator("html").evaluate((el) => el.style.getPropertyValue("--warm-city")),
-        /lofi-city/
-      );
-      const cdp = await page.context().newCDPSession(page);
-      await cdp.send("Emulation.setEmulatedMedia", {
-        features: [{ name: "prefers-reduced-transparency", value: "reduce" }],
-      });
-      await page.waitForFunction(
-        () => getComputedStyle(document.querySelector("aside")).backdropFilter === "none"
-      );
-      assert.equal(
-        await page.locator("aside").evaluate((el) => getComputedStyle(el).backdropFilter),
-        "none"
-      );
-      assert.equal(
-        await page
-          .locator("main")
-          .evaluate((el) => getComputedStyle(el, "::before").backdropFilter),
-        "none"
-      );
-      for (const dark of [true, false]) {
-        await page.evaluate((d) => document.documentElement.classList.toggle("dark", d), dark);
-        assert.match(
-          await page.locator("aside").evaluate((el) => getComputedStyle(el).backgroundColor),
-          /^rgb\(/
-        );
-      }
-    }
     assert.deepEqual(errors, []);
-    console.log("PASS production browser", { enabled, requests: requests.length });
+    console.log("PASS production browser", { requests: requests.length });
   } finally {
     await browser.close();
   }

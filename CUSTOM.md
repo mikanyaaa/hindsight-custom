@@ -3,6 +3,7 @@
 This is a **public customized copy** of [vectorize-io/hindsight](https://github.com/vectorize-io/hindsight) (MIT License) with a customized Hindsight UI/control plane for a self-hosted instance. Upstream code, history and attribution are preserved unchanged; see [LICENSE](LICENSE). Development originally happened in a private mirror, so PR numbers mentioned in these docs refer to that private development repo.
 
 ## Where the UI lives
+
 - `hindsight-control-plane/`: Next.js (App Router) + React + Tailwind + Radix/shadcn, TypeScript.
   - Pages: `src/app/[locale]/...` (i18n via `src/i18n`, `src/messages`). Add custom views as new route folders here.
   - Server-side API proxy routes: `src/app/api/...`; they call the Hindsight API (dataplane) via `src/lib/hindsight-client.ts`.
@@ -32,11 +33,14 @@ does not replace that extension.
 The control-plane image inlines its opt-in UI at `next build`. Pass these as
 Docker build args (any value other than `true` leaves the feature off):
 
-- `NEXT_PUBLIC_HINDSIGHT_THEME_WARM_GLASS` — warm glass theme and modular home
 - `NEXT_PUBLIC_HINDSIGHT_BRAIN_ENABLED` — brain memory layout
 - `NEXT_PUBLIC_BASE_PATH` — reverse-proxy base path
 
+Quiet Paper / Night Desk is the control-plane theme. It is part of the
+stylesheet, not a build flag.
+
 ## Syncing with upstream
+
 ```bash
 git remote add upstream https://github.com/vectorize-io/hindsight.git   # once
 git fetch upstream
@@ -46,28 +50,15 @@ git push origin HEAD             # then open a PR into main
 ```
 
 ## Workflow
+
 All changes go through pull requests against `main` (ChatGPT/Codex, Grok Bot, Cursor cloud agents, or by hand). Do not push directly to `main` and never force-push. Keep custom code isolated (e.g. new routes/components) to minimize merge conflicts with upstream.
 
 ## Shared-file change register (CUSTOM-HOOK)
+
 Edits to upstream-owned files are marked in-place with a `CUSTOM-HOOK <id>` comment so they are easy to find (`rg CUSTOM-HOOK`) and re-apply after an upstream sync.
 
-### Optional modular home (PR C)
-
-Only `NEXT_PUBLIC_HINDSIGHT_THEME_WARM_GLASS=true` at build time enables the custom
-home wrapper. Every other value directly selects upstream HomeView. Its data,
-translations, graph cap, actions and lifecycle are unchanged. Custom CSS loads only
-when the enabled wrapper mounts and is scoped under its own attribute. This works
-without PR A and inherits its theme when both are present. No new dependencies.
-
-| File | Marker names | Purpose |
-| --- | --- | --- |
-| `src/app/[locale]/banks/[bankId]/page.tsx` | `home-warm-panels-entry` | Exact-flag selection of custom wrapper around upstream HomeView. |
-
-The recursive registry validates paired unique `brain-` and `home-` hooks.
-Upstream sync hotspot: HomeView's panel DOM hierarchy (including its right column),
-even when no textual conflict occurs. No custom graph or API implementation.
-
 ### `ci-fork-scope` - run only secret-free CI in the mirror
+
 The mirror has no Actions secrets, so jobs that need LLM/embedding/cloud credentials can never pass here. They are guarded with `github.repository == 'vectorize-io/hindsight'` (i.e. they still run upstream). To re-enable a job in the mirror, add the secrets and drop the guard.
 
 | File | Job / step | Change |
@@ -104,9 +95,9 @@ links keep their browser behavior. Upstream v1.2 draws the same nav in a desktop
 rail and a phone drawer, and the keyboard toggle is the explicit button. The
 aside stays a mouse target and does not carry a button role.
 
-| File | Marker names | Purpose |
-| --- | --- | --- |
-| `src/components/sidebar.tsx` | `sidebar-link-state` | Accessible names for icon links and current-page state. |
+| File                         | Marker names               | Purpose                                                                 |
+| ---------------------------- | -------------------------- | ----------------------------------------------------------------------- |
+| `src/components/sidebar.tsx` | `sidebar-link-state`       | Accessible names for icon links and current-page state.                 |
 | `src/components/sidebar.tsx` | `sidebar-native-modifiers` | Preserve Shift/Alt link behavior alongside upstream Ctrl/Meta handling. |
 
 The recursive registry validates paired unique `brain-` and `sidebar-` hooks.
@@ -139,17 +130,17 @@ Canvas lifecycle, mouse/wheel events, resize/fullscreen, safe hover labels,
 SVG download and toolbar. It reuses the existing custom drawing primitives,
 without copying the upstream renderer or adding new interaction capabilities.
 
-| File | Marker names | Purpose |
-| --- | --- | --- |
-| `src/components/constellation.tsx` | `brain-network-imports` | Type-only renderer contract and the small exact-flag helper. |
-| `src/components/constellation.tsx` | `brain-network-contract` | Optional renderer object; existing callers keep their defaults. |
-| `src/components/constellation.tsx` | `brain-network-dispatch` | Flag-gated renderer-object entry; otherwise mount the unchanged network component. Euler views also stay upstream. |
-| `src/components/data-view.tsx` | `brain-network-entry` | Flag-gated lazy memory renderer and small mode/limit helpers. |
-| `src/components/data-view.tsx` | `brain-network-mode` | Custom mode state; storage effects are inert when disabled. |
-| `src/components/data-view.tsx` | `brain-network-active` | Apply the brain budget only while its graph is visible; table/timeline retain normal limits. |
-| `src/components/data-view.tsx` | `brain-network-request-limit` | Positive limit capped at 500 only in brain mode; preserve bank/filter fields. |
-| `src/components/data-view.tsx` | `brain-network-request-signature`, `brain-network-request-deps` | Reload on layout budget changes; normal signature stays identical. |
-| `src/components/data-view.tsx` | `brain-network-view` | Replace this call site only; pass custom mode controls. |
+| File                               | Marker names                                                    | Purpose                                                                                                            |
+| ---------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `src/components/constellation.tsx` | `brain-network-imports`                                         | Type-only renderer contract and the small exact-flag helper.                                                       |
+| `src/components/constellation.tsx` | `brain-network-contract`                                        | Optional renderer object; existing callers keep their defaults.                                                    |
+| `src/components/constellation.tsx` | `brain-network-dispatch`                                        | Flag-gated renderer-object entry; otherwise mount the unchanged network component. Euler views also stay upstream. |
+| `src/components/data-view.tsx`     | `brain-network-entry`                                           | Flag-gated lazy memory renderer and small mode/limit helpers.                                                      |
+| `src/components/data-view.tsx`     | `brain-network-mode`                                            | Custom mode state; storage effects are inert when disabled.                                                        |
+| `src/components/data-view.tsx`     | `brain-network-active`                                          | Apply the brain budget only while its graph is visible; table/timeline retain normal limits.                       |
+| `src/components/data-view.tsx`     | `brain-network-request-limit`                                   | Positive limit capped at 500 only in brain mode; preserve bank/filter fields.                                      |
+| `src/components/data-view.tsx`     | `brain-network-request-signature`, `brain-network-request-deps` | Reload on layout budget changes; normal signature stays identical.                                                 |
+| `src/components/data-view.tsx`     | `brain-network-view`                                            | Replace this call site only; pass custom mode controls.                                                            |
 
 No hooks in `src/messages/*.json`, `src/i18n/request.ts`, HomeView, Entities, auth or CSP.
 `integration.tsx` contains the local controls/provider and `legend.tsx` the responsive data legend.
@@ -164,27 +155,24 @@ Step 3 still owns full touch/pinch controls, stale-response/bank-reset hardening
 performance acceptance. This step adds no ambient animation, including under reduced-motion.
 No deployment, global theme, HomeView or personality/projects view.
 
-## Optional warm glass theme (PR A)
+## Quiet Paper / Night Desk
 
-Enable only with `NEXT_PUBLIC_HINDSIGHT_THEME_WARM_GLASS=true` at build time.
-Every other value means off. Custom styles, lifecycle and asset live in
-`src/custom/theme/`. The existing globals, UI primitives, page wrappers and graph
-renderers are untouched. The single root hook dynamically loads the opt-in layer;
-its effect imports scoped CSS after globals and only then sets the root attribute.
-The local wallpaper loads after an idle callback, never from critical CSS.
+The theme is always on. Tokens, the grain tile and the blocking theme script live in
+`hindsight-control-plane/src/custom/theme/`. There is one accent (`#5B47D6` /
+`#A699FF`), three radii (6 / 10 / 14) and a type scale from 12px to 32px. Glass blur
+is limited to dialogs, menus and popovers. `main` and `aside` stay sharp. The
+`.dark` class comes from the `hs-theme` cookie during server render and from a
+parser-blocking inline script, so the first paint is not the old blue palette.
 
-Upstream sync hotspot: the bank shell uses `h-dvh` and responsive content padding.
-The main blur is a decorative `::before`; all direct content wrappers are positioned
-after it in paint order, without a z-index/stacking context that would trap fixed
-fullscreen graphs. Do not couple that rule to a Tailwind padding class. The Vitest
-regression reads the current page wrapper. With Playwright available, run
-`node tests/custom/theme/layering-browser.cjs` from `hindsight-control-plane/` for
-pixel checks in light/dark at 390/768/1440px plus dialog/fullscreen checks.
+With Playwright available, run `node tests/custom/theme/layering-browser.cjs` from
+`hindsight-control-plane/` for light/dark checks at 390, 768 and 1440px.
 
-| File | Marker names | Purpose |
-| --- | --- | --- |
-| `src/app/layout.tsx` | `theme-warm-glass-entry` | Exact build-time flag; lazy custom layer, otherwise unchanged children. |
+| File                          | Marker names                                        | Purpose                                                         |
+| ----------------------------- | --------------------------------------------------- | --------------------------------------------------------------- |
+| `src/app/globals.css`         | `theme-quiet-paper-entry`                           | Import the token stylesheet into the critical CSS.              |
+| `src/app/[locale]/layout.tsx` | `theme-quiet-paper-fonts`, `theme-quiet-paper-boot` | Geist Sans and Geist Mono, cookie class, blocking theme script. |
+| `src/lib/theme-context.tsx`   | `theme-quiet-paper-persist`                         | Keep the saved theme on the `hs-theme` cookie.                  |
+| `src/lib/page-download.tsx`   | `theme-quiet-paper-print`                           | Print margin uses the same accent.                              |
 
 The recursive registry accepts registered `brain-` and `theme-` namespaces, with
-unique paired markers and exact file matching. See
-[theme plan](docs/plans/warm-glass-theme.md) for sync and acceptance criteria.
+unique paired markers and exact file matching.

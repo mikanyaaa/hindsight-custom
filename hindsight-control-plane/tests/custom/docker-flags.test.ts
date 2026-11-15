@@ -16,13 +16,10 @@ describe("control-plane Docker build args", () => {
     const nextBuild = build.indexOf("RUN npm exec -- next build");
     expect(nextBuild).toBeGreaterThan(0);
     const beforeBuild = build.slice(0, nextBuild);
-    for (const name of [
-      "NEXT_PUBLIC_BASE_PATH",
-      "NEXT_PUBLIC_HINDSIGHT_THEME_WARM_GLASS",
-      "NEXT_PUBLIC_HINDSIGHT_BRAIN_ENABLED",
-    ]) {
+    for (const name of ["NEXT_PUBLIC_BASE_PATH", "NEXT_PUBLIC_HINDSIGHT_BRAIN_ENABLED"]) {
       expect(beforeBuild).toContain(`ARG ${name}`);
       expect(beforeBuild).toContain(`ENV ${name}=\${${name}}`);
     }
+    expect(beforeBuild).not.toContain("NEXT_PUBLIC_HINDSIGHT_THEME_WARM_GLASS");
   });
 });
