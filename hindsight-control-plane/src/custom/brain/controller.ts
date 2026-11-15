@@ -1,4 +1,5 @@
 import type { GraphNode } from "../../components/graph-data";
+import { graphPalette } from "../theme/graph-palette";
 import {
   blitCameraSnapshot,
   graphDevicePixelRatio,
@@ -80,7 +81,12 @@ export function mountBrainCanvas(
     if (moving) {
       if (!snapshot?.active) snapshot = retainCameraSnapshot(canvas, rendered, snapshot);
       if (snapshot?.active) {
-        blitCameraSnapshot(ctx, snapshot, camera, "#0B0726");
+        blitCameraSnapshot(
+          ctx,
+          snapshot,
+          camera,
+          graphPalette(document.documentElement.classList.contains("dark")).background
+        );
         presentedBlit = true;
         frame = requestAnimationFrame(draw);
         return;

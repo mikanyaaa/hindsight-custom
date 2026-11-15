@@ -1,12 +1,8 @@
 import type { ConstellationProps } from "../../components/constellation";
+import { GRAPH_LINK, GRAPH_NODE } from "../theme/graph-palette";
 import type { BrainLinkStyle, BrainNodeStyle, BrainRenderer } from "./render-model";
 
-const LINK_COLOURS: Record<string, string> = {
-  semantic: "#0074d9",
-  temporal: "#009296",
-  entity: "#f59e0b",
-  causal: "#8b5cf6",
-};
+const LINK_COLOURS: Record<string, string> = GRAPH_LINK;
 
 /** Same data scale as the existing renderer: cool blue → lavender → orange-red. */
 function heatColour(value: number): string {
@@ -38,7 +34,7 @@ export function prepareBrainScene(props: ConstellationProps, renderer: BrainRend
       (scope != null && props.clusterColorFn?.(scope)) ||
       props.nodeColorFn?.(node) ||
       node.color ||
-      "#0074d9";
+      GRAPH_NODE;
     return {
       node,
       wx: point.x,
@@ -61,7 +57,7 @@ export function prepareBrainScene(props: ConstellationProps, renderer: BrainRend
       a,
       b,
       type,
-      color: props.linkColorFn?.(link) || link.color || LINK_COLOURS[type] || "#0074d9",
+      color: props.linkColorFn?.(link) || link.color || LINK_COLOURS[type] || GRAPH_NODE,
     });
     if (!neighbours.has(a)) neighbours.set(a, new Set());
     if (!neighbours.has(b)) neighbours.set(b, new Set());

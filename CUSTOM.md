@@ -193,7 +193,9 @@ The bank frame is a 232px rail (collapse saved on the `hs-sidebar` cookie), a
 command menu in the top bar, and a solid bottom tab bar on phones.
 Buttons, fields, cards, menus and badges take their size from that scale:
 6px for badges and menu items, 10px for controls, 14px for panels, type from
-12px, and a 44px control height.
+12px, and a 44px control height. The memory graph uses the same surfaces,
+accent and chart colours. Its canvas reads them from
+`src/custom/theme/graph-palette.ts`.
 
 With Playwright available, run `node tests/custom/theme/layering-browser.cjs` from
 `hindsight-control-plane/` for light/dark checks at 390, 768 and 1440px.
@@ -222,6 +224,9 @@ With Playwright available, run `node tests/custom/theme/layering-browser.cjs` fr
 | `src/components/ui/command.tsx` | `primitive-quiet-paper-command`                 | Command rows match the menu items.                               |
 | `src/components/ui/checkbox.tsx` | `primitive-quiet-paper-check`                  | Unchecked box uses the ink, not the old blue.                    |
 | `src/components/ui/inline-attachment-text.tsx` | `primitive-quiet-paper-attachment` | Attachment labels stay on the type scale.                 |
+| `src/components/constellation.tsx` | `theme-quiet-paper-graph` | Memory graph chrome, links and type use the token palette. |
+| `src/components/home-view.tsx` | `theme-quiet-paper-graph-home` | Home memory map uses the chart colours. |
+| `src/components/bank-stats-view.tsx` | `theme-quiet-paper-graph-stats` | Link-type chart matches the graph. |
 
 The recursive registry accepts registered `brain-`, `theme-`, `frame-` and `primitive-` namespaces, with
 unique paired markers and exact file matching.

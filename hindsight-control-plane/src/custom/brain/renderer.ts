@@ -1,11 +1,25 @@
 import { BRAIN_GEOMETRY, projectBrainPoint } from "./geometry";
 import type { BrainData } from "./adapter";
 import type { BrainLinkStyle, BrainNodeStyle, BrainRenderer, BrainView } from "./render-model";
+import { GRAPH_LINK, GRAPH_NODE, graphFont, graphPalette } from "../theme/graph-palette";
 import { createElement } from "react";
 import { BrainCanvas } from "./canvas";
 
-const BACKGROUND = "#0B0726";
 const MAX_LINKS = 5000;
+
+function paint() {
+  const dark =
+    typeof document !== "undefined" && document.documentElement.classList.contains("dark");
+  return graphPalette(dark);
+}
+
+type CurveRole = "hemisphere" | "furrow" | "fissure";
+
+function curveColor(role: CurveRole, accent: string): string {
+  if (role === "hemisphere") return accent;
+  if (role === "furrow") return GRAPH_LINK.temporal;
+  return GRAPH_LINK.entity;
+}
 
 function escapeXml(value: string): string {
   return value.replace(
@@ -18,7 +32,7 @@ function safeColor(value: string): string {
   // Canvas and SVG share the same restricted data colours; SVG must never load URL paints.
   return /^(#[\da-f]{3,8}|rgba?\([\d.,%\s]+\)|hsla?\([\d.,%\s]+\))$/i.test(value)
     ? value
-    : "#00FFFF";
+    : GRAPH_NODE;
 }
 
 function screen(view: BrainView, x: number, y: number) {
@@ -64,16 +78,16 @@ export function createBrainRenderer(data: BrainData): BrainRenderer {
     ...Object.values(BRAIN_GEOMETRY.hemispheres).map((points) => ({
       points,
       close: true,
-      color: "#9D00FF",
-      opacity: 0.035,
+      role: "hemisphere" as const,
+      opacity: 0.05,
     })),
     ...BRAIN_GEOMETRY.furrows.map((points) => ({
       points,
       close: false,
-      color: "#00FFFF",
-      opacity: 0.1,
+      role: "furrow" as const,
+      opacity: 0.14,
     })),
-    { points: BRAIN_GEOMETRY.fissure, close: false, color: "#FF007F", opacity: 0.1 },
+    { points: BRAIN_GEOMETRY.fissure, close: false, role: "fissure" as const, opacity: 0.12 },
   ].map((curve) => ({
     ...curve,
     points: curve.points.map((point) => data.toWorld(projectBrainPoint({ ...point, z: 0 }))),
@@ -91,7 +105,8 @@ export function createBrainRenderer(data: BrainData): BrainRenderer {
         )
       ),
     decoration(ctx, view) {
-      ctx.fillStyle = BACKGROUND;
+      const colors = paint();
+      ctx.fillStyle = colors.background;
       ctx.fillRect(0, 0, view.W, view.H);
       if (!data.graph.nodes.length) return;
       for (const curve of decoration) {
@@ -102,12 +117,13 @@ export function createBrainRenderer(data: BrainData): BrainRenderer {
           else ctx.lineTo(p.x, p.y);
         });
         ctx.globalAlpha = curve.opacity;
+        const color = curveColor(curve.role, colors.accent);
         if (curve.close) {
           ctx.closePath();
-          ctx.fillStyle = curve.color;
+          ctx.fillStyle = color;
           ctx.fill();
         } else {
-          ctx.strokeStyle = curve.color;
+          ctx.strokeStyle = color;
           ctx.lineWidth = 0.5;
           ctx.stroke();
         }
@@ -153,8 +169,8 @@ export function createBrainRenderer(data: BrainData): BrainRenderer {
       ctx.globalAlpha = 1;
       if (hovered) {
         const label = node.node.label ?? node.node.id;
-        ctx.font = "11px sans-serif";
-        ctx.fillStyle = "#FFFFFF";
+        ctx.font = graphFont();
+        ctx.fillStyle = paint().foreground;
         ctx.textAlign = "left";
         ctx.fillText(
           label.length > 80 ? `${label.slice(0, 80)}…` : label,
@@ -174,9 +190,10 @@ export function createBrainRenderer(data: BrainData): BrainRenderer {
           .filter((link) => link.a === hover || link.b === hover)
           .flatMap((link) => [link.a, link.b])
       );
+      const colors = paint();
       const parts = [
         `<svg xmlns="http://www.w3.org/2000/svg" width="${view.W}" height="${view.H}" viewBox="0 0 ${view.W} ${view.H}">`,
-        `<rect width="100%" height="100%" fill="${BACKGROUND}"/>`,
+        `<rect width="100%" height="100%" fill="${colors.background}"/>`,
       ];
       if (nodes.length)
         for (const curve of decoration) {
@@ -188,8 +205,8 @@ export function createBrainRenderer(data: BrainData): BrainRenderer {
             .join(" ");
           parts.push(
             curve.close
-              ? `<polygon points="${points}" fill="${curve.color}" opacity="${curve.opacity}"/>`
-              : `<polyline points="${points}" fill="none" stroke="${curve.color}" stroke-width="0.5" opacity="${curve.opacity}"/>`
+              ? `<polygon points="${points}" fill="${curveColor(curve.role, colors.accent)}" opacity="${curve.opacity}"/>`
+              : `<polyline points="${points}" fill="none" stroke="${curveColor(curve.role, colors.accent)}" stroke-width="0.5" opacity="${curve.opacity}"/>`
           );
         }
       for (const edge of edges) {
@@ -212,7 +229,7 @@ export function createBrainRenderer(data: BrainData): BrainRenderer {
         if (index === hover) {
           const label = node.node.label ?? node.node.id;
           parts.push(
-            `<text x="${x[index] + style.radius + 5}" y="${y[index] + 4}" fill="#FFFFFF" font-family="sans-serif" font-size="11">${escapeXml(label.length > 80 ? `${label.slice(0, 80)}…` : label)}</text>`
+            `<text x="${x[index] + style.radius + 5}" y="${y[index] + 4}" fill="${colors.foreground}" font-family="sans-serif" font-size="12">${escapeXml(label.length > 80 ? `${label.slice(0, 80)}…` : label)}</text>`
           );
         }
       });

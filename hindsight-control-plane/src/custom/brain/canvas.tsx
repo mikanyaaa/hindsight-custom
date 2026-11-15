@@ -67,7 +67,7 @@ export function BrainCanvas({
     <div
       style={
         fullscreen
-          ? { position: "fixed", inset: 0, zIndex: 50, background: "#09090b" }
+          ? { position: "fixed", inset: 0, zIndex: 50, background: "var(--background)" }
           : { position: "relative", width: "100%", height: `${options.height ?? 700}px` }
       }
     >
