@@ -1,18 +1,21 @@
 name: Windows Smoke Test
 
-# Daily smoke test that installs the API on Windows and runs the Python client
+# Manual smoke test that installs the API on Windows and runs the Python client
 # integration tests against a live server. Windows is only exercised by the
 # hindsight-embed jobs in test.yml on PRs; this catches Windows-specific
 # regressions in the API server + client path (e.g. process spawning, console
 # subsystem / ConPTY behaviour, see #1885) that the Linux client jobs miss.
 on:
-  schedule:
-    # 06:00 UTC daily.
-    - cron: "0 6 * * *"
+  # CUSTOM-HOOK ci-minutes: no daily schedule. The job stays upstream-only
+  # (it needs upstream credentials). Dispatch is manual.
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: windows-smoke
+  cancel-in-progress: true
 
 jobs:
   windows-client-smoke:

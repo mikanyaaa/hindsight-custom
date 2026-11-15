@@ -1,9 +1,8 @@
 name: Performance Tests
 
 on:
-  schedule:
-    # Run daily at 06:00 UTC
-    - cron: "0 6 * * *"
+  # CUSTOM-HOOK ci-minutes: no daily schedule. Jobs stay upstream-only
+  # (`github.repository == 'vectorize-io/hindsight'`). Dispatch is manual.
   workflow_dispatch:
     inputs:
       scale:

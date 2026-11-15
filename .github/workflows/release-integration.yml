@@ -1,12 +1,13 @@
 name: Release Integration
 
+# CUSTOM-HOOK ci-fork-scope: integration tags do not publish from this fork.
 on:
-  push:
-    tags:
-      - 'integrations/**'
+  workflow_dispatch:
 
 jobs:
   publish:
+    # CUSTOM-HOOK ci-fork-scope: upstream only.
+    if: github.repository == 'vectorize-io/hindsight'
     runs-on: ubuntu-latest
     permissions:
       id-token: write  # for PyPI trusted publishing + build-provenance attestations
