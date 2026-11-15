@@ -188,7 +188,9 @@ async def test_bank_config_and_validator_compose():
             tools = await mcp_server._tool_manager.get_tools()
             tool_names = set(tools.keys())
 
-        assert tool_names == {"recall", "reflect"}
+        # reflect implies get_reflect_result, so a validator that keeps reflect
+        # still leaves a way to read an answer that came back pending.
+        assert tool_names == {"recall", "reflect", "get_reflect_result"}
     finally:
         _current_bank_id.reset(bank_token)
         _current_api_key.reset(api_key_token)
