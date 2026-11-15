@@ -1,4 +1,11 @@
 import type { GraphNode } from "../../components/graph-data";
+import {
+  blitCameraSnapshot,
+  graphDevicePixelRatio,
+  prefersReducedMotion,
+  retainCameraSnapshot,
+  type CameraSnapshot,
+} from "../graph/frame";
 import { cameraMoving, watchBrainCanvas, type BrainRenderer } from "./render-model";
 import type { BrainScene } from "./scene";
 
@@ -34,55 +41,104 @@ export function mountBrainCanvas(
   size?: (node: GraphNode) => number
 ) {
   let frame = 0;
+  let painted = false;
+  let paintedHover = -2;
+  let presentedBlit = false;
+  let snapshot: CameraSnapshot | null = null;
+  const reduceMotion = prefersReducedMotion();
+  const screenX = new Float32Array(scene.nodes.length);
+  const screenY = new Float32Array(scene.nodes.length);
+  const project = () => {
+    for (let index = 0; index < scene.nodes.length; index++) {
+      const node = scene.nodes[index];
+      screenX[index] = camera.W / 2 + camera.panX + node.wx * camera.zoom;
+      screenY[index] = camera.H / 2 + camera.panY + node.wy * camera.zoom;
+    }
+  };
   const draw = () => {
+    frame = 0;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    camera.panX += (camera.targetPanX - camera.panX) * 0.12;
-    camera.panY += (camera.targetPanY - camera.panY) * 0.12;
-    camera.zoom += (camera.targetZoom - camera.zoom) * 0.12;
-    const x = new Float32Array(
-      scene.nodes.map((node) => camera.W / 2 + camera.panX + node.wx * camera.zoom)
-    );
-    const y = new Float32Array(
-      scene.nodes.map((node) => camera.H / 2 + camera.panY + node.wy * camera.zoom)
-    );
+    const rendered = {
+      W: camera.W,
+      H: camera.H,
+      dpr: camera.dpr,
+      panX: camera.panX,
+      panY: camera.panY,
+      zoom: camera.zoom,
+    };
+    if (reduceMotion) {
+      camera.panX = camera.targetPanX;
+      camera.panY = camera.targetPanY;
+      camera.zoom = camera.targetZoom;
+    } else {
+      camera.panX += (camera.targetPanX - camera.panX) * 0.12;
+      camera.panY += (camera.targetPanY - camera.panY) * 0.12;
+      camera.zoom += (camera.targetZoom - camera.zoom) * 0.12;
+    }
+    const moving = cameraMoving(camera);
+    if (moving) {
+      if (!snapshot?.active) snapshot = retainCameraSnapshot(canvas, rendered, snapshot);
+      if (snapshot?.active) {
+        blitCameraSnapshot(ctx, snapshot, camera, "#0B0726");
+        presentedBlit = true;
+        frame = requestAnimationFrame(draw);
+        return;
+      }
+    }
+    const wasBlit = presentedBlit;
+    presentedBlit = false;
+    if (snapshot) snapshot.active = false;
+    project();
+    let nextHover = camera.mouseX < 0 ? -1 : camera.hoverIndex;
     if (camera.mouseX >= 0 && !camera.isDragging) {
       let distance = camera.zoom > 1.5 ? 80 : 30;
-      camera.hoverIndex = -1;
+      nextHover = -1;
       for (let index = 0; index < scene.nodes.length; index++) {
         if (
-          x[index] < -60 ||
-          x[index] > camera.W + 60 ||
-          y[index] < -60 ||
-          y[index] > camera.H + 60
+          screenX[index] < -60 ||
+          screenX[index] > camera.W + 60 ||
+          screenY[index] < -60 ||
+          screenY[index] > camera.H + 60
         )
           continue;
-        const candidate = Math.hypot(camera.mouseX - x[index], camera.mouseY - y[index]);
+        const candidate = Math.hypot(
+          camera.mouseX - screenX[index],
+          camera.mouseY - screenY[index]
+        );
         if (candidate < distance) {
           distance = candidate;
-          camera.hoverIndex = index;
+          nextHover = index;
         }
       }
     }
+    if (painted && !moving && !wasBlit && nextHover === paintedHover) return;
+    camera.hoverIndex = nextHover;
+    paintedHover = nextHover;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
     ctx.scale(camera.dpr, camera.dpr);
     renderer.decoration(ctx, camera);
-    renderer.links(ctx, x, y, scene.links, camera.hoverIndex);
+    renderer.links(ctx, screenX, screenY, scene.links, camera.hoverIndex);
     const neighbours = scene.neighbours.get(camera.hoverIndex);
     const order = scene.nodes
       .map((_, index) => index)
       .filter((index) => index !== camera.hoverIndex);
     if (camera.hoverIndex >= 0 && scene.nodes[camera.hoverIndex]) order.push(camera.hoverIndex);
     for (const index of order) {
-      if (x[index] < -60 || x[index] > camera.W + 60 || y[index] < -60 || y[index] > camera.H + 60)
+      if (
+        screenX[index] < -60 ||
+        screenX[index] > camera.W + 60 ||
+        screenY[index] < -60 ||
+        screenY[index] > camera.H + 60
+      )
         continue;
       const node = scene.nodes[index];
       renderer.node(
         ctx,
         node,
-        x[index],
-        y[index],
+        screenX[index],
+        screenY[index],
         index === camera.hoverIndex,
         neighbours?.has(index) ?? false,
         camera.hoverIndex >= 0,
@@ -90,7 +146,8 @@ export function mountBrainCanvas(
       );
     }
     ctx.restore();
-    if (cameraMoving(camera)) frame = requestAnimationFrame(draw);
+    painted = true;
+    if (moving) frame = requestAnimationFrame(draw);
   };
   const redraw = () => {
     cancelAnimationFrame(frame);
@@ -100,9 +157,11 @@ export function mountBrainCanvas(
     const rect = canvas.getBoundingClientRect();
     camera.W = rect.width;
     camera.H = rect.height;
-    camera.dpr = Math.min(2, window.devicePixelRatio || 1);
+    if (snapshot) snapshot.active = false;
+    camera.dpr = graphDevicePixelRatio(rect.width, rect.height);
     canvas.width = camera.W * camera.dpr;
     canvas.height = camera.H * camera.dpr;
+    painted = false;
     if (refit) camera.zoom = camera.targetZoom = renderer.fitZoom(camera.W, camera.H);
     redraw();
   };
@@ -148,7 +207,13 @@ export function mountBrainCanvas(
       Math.min(8, camera.targetZoom * (event.deltaY > 0 ? 0.9 : 1.1))
     );
   };
+  const onVisibility = () => {
+    if (!document.hidden) return;
+    cancelAnimationFrame(frame);
+    frame = 0;
+  };
   canvas.addEventListener("mousemove", move);
+  document.addEventListener("visibilitychange", onVisibility);
   canvas.addEventListener("mousedown", down);
   canvas.addEventListener("mouseup", up);
   canvas.addEventListener("mouseleave", leave);
@@ -166,6 +231,7 @@ export function mountBrainCanvas(
     dispose() {
       clearTimeout(timer);
       cancelAnimationFrame(frame);
+      document.removeEventListener("visibilitychange", onVisibility);
       observer?.disconnect();
       stopRedraw();
       window.removeEventListener("resize", resize);

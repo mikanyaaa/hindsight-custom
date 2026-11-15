@@ -193,6 +193,20 @@ describe("original network rendering", () => {
     flushFrame();
     expect(prepareWithSegments).not.toHaveBeenCalled();
     expect(layoutWithLines).not.toHaveBeenCalled();
+    // Overview zoom samples ambient drift; it does not queue another frame immediately.
+    expect(frames.size).toBe(0);
+  });
+
+  it("stays paused when the operating system requests reduced motion", () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query.includes("reduce"),
+      media: query,
+      addEventListener() {},
+      removeEventListener() {},
+    }));
+    render(wrap(<Constellation data={graph} />));
+    flushFrame();
+    expect(frames.size).toBe(0);
   });
 
   it("does not run an ambient loop for an empty graph", () => {

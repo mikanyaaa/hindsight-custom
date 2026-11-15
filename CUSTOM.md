@@ -124,9 +124,10 @@ use a unique `brain-` name with paired begin/end comments, and every registered
 name must exist in the listed source file. The recursive hook-registry test
 rejects unregistered, malformed, unpaired and orphaned entries.
 
-The shared constellation has only **three** hook pairs. It dispatches to
-`brainRenderer.render` only behind the exact flag; the network component body is
-otherwise identical to upstream. The custom renderer owns scene preparation,
+The shared constellation has three `brain-` hook pairs. It dispatches to
+`brainRenderer.render` only behind the exact flag. Separate `graph-frame-` hooks
+in the same file keep the network drawing path but stop it rasterizing every
+display frame. The custom renderer owns scene preparation,
 Canvas lifecycle, mouse/wheel events, resize/fullscreen, safe hover labels,
 SVG download and toolbar. It reuses the existing custom drawing primitives,
 without copying the upstream renderer or adding new interaction capabilities.
@@ -155,6 +156,30 @@ are omitted. No minimum point spacing is promised.
 Step 3 still owns full touch/pinch controls, stale-response/bank-reset hardening and device
 performance acceptance. This step adds no ambient animation, including under reduced-motion.
 No deployment, global theme, HomeView or personality/projects view.
+
+## Graph frame budget
+
+The network constellation and the brain canvas both redraw vectors on the main
+thread. Ambient drift at overview zoom is sub-pixel, and a pan or zoom was
+restroking every curve while the camera eased. Sampling waits until the drift
+is visible (about half a pixel, immediately when zoomed in). A sample that
+took longer than a frame waits four times that long, at most one second. A
+gesture reuses the last crisp frame and draws vectors again when the camera
+settles. The backing store is capped at 1.5× and 1.6 million pixels.
+`prefers-reduced-motion` starts the network paused unless the motion toggle was explicitly turned on,
+and snaps the brain camera instead of easing it. No new environment variable.
+
+`src/custom/graph/dataset.ts` builds synthetic graphs for tests (3_000 nodes at
+degree 12 is 18_000 links). It is not wired to a bank.
+
+| File | Marker names | Purpose |
+| --- | --- | --- |
+| `src/components/constellation.tsx` | `graph-frame-import` | Frame-budget helpers. |
+| `src/components/constellation.tsx` | `graph-frame-motion` | Honour reduced motion unless the toggle was set. |
+| `src/components/constellation.tsx` | `graph-frame-snapshot` | Blit the settled frame while the camera eases. |
+| `src/components/constellation.tsx` | `graph-frame-sample` | Sample ambient drift instead of drawing every frame. |
+| `src/components/constellation.tsx` | `graph-frame-dpr` | Cap the backing store. The fullscreen remeasure uses the same helper. |
+| `src/components/constellation.tsx` | `graph-frame-draw` | Cancel a pending sample when input asks for a frame. |
 
 ## Quiet Paper / Night Desk
 
