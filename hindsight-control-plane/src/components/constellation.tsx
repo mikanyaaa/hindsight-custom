@@ -68,6 +68,11 @@ export interface ConstellationProps {
   // CUSTOM-HOOK: brain-network-contract end
   data: GraphData;
   height?: number;
+  /**
+   * Share, pause and fullscreen sit on top of the drawing. A short card has no
+   * room for them; the card header is the way out to the full map.
+   */
+  controls?: boolean;
   onNodeClick?: (node: GraphNode) => void;
   nodeColorFn?: (node: GraphNode) => string;
   linkColorFn?: (link: GraphLink) => string;
@@ -275,6 +280,7 @@ function NetworkConstellation({
   // CUSTOM-HOOK: brain-network-dispatch end
   data,
   height = 700,
+  controls = true,
   onNodeClick,
   nodeColorFn,
   linkColorFn,
@@ -1067,7 +1073,7 @@ function NetworkConstellation({
     // Heat gradient legend (top-left, below instructions). Suppressed while
     // clustering, where node color encodes the cluster (scope), not the gradient.
     // On a phone the toolbar occupies the top, so the legend starts beneath it.
-    const hudTop = W < 720 ? 48 : 0;
+    const hudTop = controls && W < 720 ? 48 : 0;
     if (clusters.length === 0) {
       ctx.textAlign = "left";
       ctx.font = graphFont("600");
@@ -1167,6 +1173,7 @@ function NetworkConstellation({
     // CUSTOM-HOOK: graph-frame-sample end
   }, [
     isDark,
+    controls,
     preparedNodes,
     linksWithIndices,
     linksByNode,
@@ -1767,137 +1774,138 @@ function NetworkConstellation({
     >
       <canvas ref={canvasRef} style={{ width: "100%", height: "100%", display: "block" }} />
 
-      {/* Toolbar */}
-      <div
-        style={{
-          position: "absolute",
-          top: 8,
-          right: 8,
-          zIndex: 21,
-          display: "flex",
-          gap: 6,
-        }}
-      >
-        {/* Share as SVG */}
-        <button
-          onClick={handleExportSvg}
-          style={toolbarBtnStyle(isDark)}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.opacity = "1";
+      {controls && (
+        <div
+          style={{
+            position: "absolute",
+            top: 8,
+            right: 8,
+            zIndex: 21,
+            display: "flex",
+            gap: 6,
           }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.opacity = "0.7";
-          }}
-          title={t("exportSvgTitle")}
         >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+          {/* Share as SVG */}
+          <button
+            onClick={handleExportSvg}
+            style={toolbarBtnStyle(isDark)}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.opacity = "1";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.opacity = "0.7";
+            }}
+            title={t("exportSvgTitle")}
           >
-            <path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7" />
-            <polyline points="8 8 12 4 16 8" />
-            <line x1="12" y1="4" x2="12" y2="15" />
-          </svg>
-          {t("exportSvgLabel")}
-        </button>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7" />
+              <polyline points="8 8 12 4 16 8" />
+              <line x1="12" y1="4" x2="12" y2="15" />
+            </svg>
+            {t("exportSvgLabel")}
+          </button>
 
-        {/* Ambient-motion toggle */}
-        <button
-          onClick={toggleMotion}
-          style={toolbarBtnStyle(isDark)}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.opacity = "1";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.opacity = "0.7";
-          }}
-          title={motionEnabled ? t("pauseMotionTitle") : t("resumeMotionTitle")}
-        >
-          {motionEnabled ? (
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <rect x="6" y="4" width="4" height="16" />
-              <rect x="14" y="4" width="4" height="16" />
-            </svg>
-          ) : (
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polygon points="5 3 19 12 5 21 5 3" />
-            </svg>
-          )}
-          {motionEnabled ? t("pauseMotionLabel") : t("resumeMotionLabel")}
-        </button>
+          {/* Ambient-motion toggle */}
+          <button
+            onClick={toggleMotion}
+            style={toolbarBtnStyle(isDark)}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.opacity = "1";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.opacity = "0.7";
+            }}
+            title={motionEnabled ? t("pauseMotionTitle") : t("resumeMotionTitle")}
+          >
+            {motionEnabled ? (
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="6" y="4" width="4" height="16" />
+                <rect x="14" y="4" width="4" height="16" />
+              </svg>
+            ) : (
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polygon points="5 3 19 12 5 21 5 3" />
+              </svg>
+            )}
+            {motionEnabled ? t("pauseMotionLabel") : t("resumeMotionLabel")}
+          </button>
 
-        {/* Fullscreen toggle */}
-        <button
-          onClick={toggleFullscreen}
-          style={toolbarBtnStyle(isDark)}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.opacity = "1";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.opacity = "0.7";
-          }}
-          title={isFullscreen ? t("exitFullscreenTitle") : t("enterFullscreenTitle")}
-        >
-          {isFullscreen ? (
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polyline points="4 14 10 14 10 20" />
-              <polyline points="20 10 14 10 14 4" />
-              <line x1="14" y1="10" x2="21" y2="3" />
-              <line x1="3" y1="21" x2="10" y2="14" />
-            </svg>
-          ) : (
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polyline points="15 3 21 3 21 9" />
-              <polyline points="9 21 3 21 3 15" />
-              <line x1="21" y1="3" x2="14" y2="10" />
-              <line x1="3" y1="21" x2="10" y2="14" />
-            </svg>
-          )}
-          {isFullscreen ? t("exitFullscreenLabel") : t("enterFullscreenLabel")}
-        </button>
-      </div>
+          {/* Fullscreen toggle */}
+          <button
+            onClick={toggleFullscreen}
+            style={toolbarBtnStyle(isDark)}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.opacity = "1";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.opacity = "0.7";
+            }}
+            title={isFullscreen ? t("exitFullscreenTitle") : t("enterFullscreenTitle")}
+          >
+            {isFullscreen ? (
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="4 14 10 14 10 20" />
+                <polyline points="20 10 14 10 14 4" />
+                <line x1="14" y1="10" x2="21" y2="3" />
+                <line x1="3" y1="21" x2="10" y2="14" />
+              </svg>
+            ) : (
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="15 3 21 3 21 9" />
+                <polyline points="9 21 3 21 3 15" />
+                <line x1="21" y1="3" x2="14" y2="10" />
+                <line x1="3" y1="21" x2="10" y2="14" />
+              </svg>
+            )}
+            {isFullscreen ? t("exitFullscreenLabel") : t("enterFullscreenLabel")}
+          </button>
+        </div>
+      )}
 
       {/* Tooltip */}
       <div

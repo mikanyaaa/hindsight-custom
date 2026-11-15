@@ -195,7 +195,10 @@ Buttons, fields, cards, menus and badges take their size from that scale:
 6px for badges and menu items, 10px for controls, 14px for panels, type from
 12px, and a 44px control height. The memory graph uses the same surfaces,
 accent and chart colours. Its canvas reads them from
-`src/custom/theme/graph-palette.ts`.
+`src/custom/theme/graph-palette.ts`. The home page is a 48px recall field,
+four counts, the last seven days of memories grouped by tag, and mental
+models with their freshness beside a short memory map. A point on that map
+opens the memory. Asking from home opens recall with the question filled in.
 
 With Playwright available, run `node tests/custom/theme/layering-browser.cjs` from
 `hindsight-control-plane/` for light/dark checks at 390, 768 and 1440px.
@@ -225,7 +228,8 @@ With Playwright available, run `node tests/custom/theme/layering-browser.cjs` fr
 | `src/components/ui/checkbox.tsx` | `primitive-quiet-paper-check`                  | Unchecked box uses the ink, not the old blue.                    |
 | `src/components/ui/inline-attachment-text.tsx` | `primitive-quiet-paper-attachment` | Attachment labels stay on the type scale.                 |
 | `src/components/constellation.tsx` | `theme-quiet-paper-graph` | Memory graph chrome, links and type use the token palette. |
-| `src/components/home-view.tsx` | `theme-quiet-paper-graph-home` | Home memory map uses the chart colours. |
+| `src/components/home-view.tsx` | `home-quiet-paper-desk` | Home is the recall field, the week, and the short map. |
+| `src/components/search-debug-view.tsx` | `home-quiet-paper-recall` | A question from home runs on the recall page. |
 | `src/components/bank-stats-view.tsx` | `theme-quiet-paper-graph-stats` | Link-type chart matches the graph. |
 
 The recursive registry accepts registered `brain-`, `theme-`, `frame-` and `primitive-` namespaces, with
@@ -253,7 +257,7 @@ app locale. Session expiry and request timeouts render in `src/custom/`.
 | `src/components/bank-stats-view.tsx` | `visible-poll-stats`, `visible-poll-timeseries`, `relative-time-stats` | Visible-tab stats refresh and locale timestamps. |
 | `src/components/cron-schedule-preview.tsx` | `relative-time-cron` | Pass the app locale into relative time. |
 | `src/components/freshness-line.tsx` | `relative-time-freshness` | Pass the app locale into relative time. |
-| `src/components/home-view.tsx` | `relative-time-home` | Pass the app locale into relative time. |
+| `src/custom/home/home-desk.tsx` | `relative-time-home` | Pass the app locale into relative time. |
 | `src/components/next-refresh.tsx` | `relative-time-next` | Pass the app locale into relative time. |
 | `src/components/banks-overview.tsx` | `relative-time-banks` | Pass the app locale into relative time. |
 | `src/components/mental-models-view.tsx` | `relative-time-models` | Pass the app locale into relative time. |
