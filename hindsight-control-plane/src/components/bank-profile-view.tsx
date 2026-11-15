@@ -10,6 +10,8 @@ import remarkGfm from "remark-gfm";
 import { useRouter } from "next/navigation";
 import { client } from "@/lib/api";
 import { useBank } from "@/lib/bank-context";
+import { isPageFailure } from "@/custom/pages/failure";
+import { PageError, PageLoading } from "@/custom/pages/status";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
@@ -141,6 +143,7 @@ export function BankProfileView({ hideReflectFields = false }: { hideReflectFiel
   const [stats, setStats] = useState<BankStats | null>(null);
   const [directives, setDirectives] = useState<Directive[]>([]);
   const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [showDispositionDialog, setShowDispositionDialog] = useState(false);
   const [showMissionDialog, setShowMissionDialog] = useState(false);
 
@@ -191,8 +194,9 @@ export function BankProfileView({ hideReflectFields = false }: { hideReflectFiel
       setProfile(profileData);
       setStats(statsData as BankStats);
       setDirectives(directivesData);
+      setFailed(false);
     } catch (error) {
-      // Error toast is shown automatically by the API client interceptor
+      if (isPageFailure(error)) setFailed(true);
     } finally {
       setLoading(false);
     }
@@ -284,14 +288,11 @@ export function BankProfileView({ hideReflectFields = false }: { hideReflectFiel
   }
 
   if (loading && !profile) {
-    return (
-      <Card>
-        <CardContent className="text-center py-10">
-          <Spinner size="lg" variant="jump" className="mx-auto mb-3" />
-          <div className="text-lg text-muted-foreground">{t("loadingProfile")}</div>
-        </CardContent>
-      </Card>
-    );
+    return <PageLoading label={t("loadingProfile")} />;
+  }
+
+  if (failed && !profile) {
+    return <PageError onRetry={() => void loadData()} />;
   }
 
   return (
@@ -392,7 +393,7 @@ export function BankProfileView({ hideReflectFields = false }: { hideReflectFiel
             onClick={() => setShowCreateDirective(true)}
             variant="outline"
             size="sm"
-            className="h-8"
+            className="h-11"
           >
             <Plus className="w-4 h-4 mr-1" />
             {t("addDirective")}
@@ -680,7 +681,7 @@ function DispositionEditDialog({
                 </div>
                 <span className="text-sm font-bold text-primary">{editDisposition[trait]}/5</span>
               </div>
-              <div className="flex justify-between text-[10px] text-muted-foreground">
+              <div className="flex justify-between text-xs text-muted-foreground">
                 <span>{traitLabels[trait].lowLabel}</span>
                 <span>{traitLabels[trait].highLabel}</span>
               </div>
@@ -957,7 +958,7 @@ function DirectiveDetailPanel({
                   variant="ghost"
                   size="sm"
                   onClick={() => setShowEditModal(true)}
-                  className="h-7 w-7 p-0"
+                  className="h-11 w-11 p-0"
                 >
                   <Pencil className="h-3.5 w-3.5" />
                 </Button>
@@ -972,11 +973,11 @@ function DirectiveDetailPanel({
               variant="ghost"
               size="sm"
               onClick={onDelete}
-              className="h-8 w-8 p-0 text-muted-foreground hover:text-rose-500"
+              className="h-11 w-11 p-0 text-muted-foreground hover:text-rose-500"
             >
               <Trash2 className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="sm" onClick={onClose} className="h-8 w-8 p-0">
+            <Button variant="ghost" size="sm" onClick={onClose} className="h-11 w-11 p-0">
               <X className="h-4 w-4" />
             </Button>
           </div>

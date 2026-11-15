@@ -9,6 +9,8 @@ import { toast } from "sonner";
 
 import { client } from "@/lib/api";
 import { useBank, type BankInfo } from "@/lib/bank-context";
+import { isPageFailure } from "@/custom/pages/failure";
+import { PageEmpty, PageError, PageLoading } from "@/custom/pages/status";
 import { bankRoute } from "@/lib/bank-url";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { cn } from "@/lib/utils";
@@ -98,6 +100,7 @@ export function BanksOverview() {
   const [banks, setBanks] = React.useState<BankInfo[]>([]);
   const [total, setTotal] = React.useState(0);
   const [loading, setLoading] = React.useState(true);
+  const [failed, setFailed] = React.useState(false);
   const [page, setPage] = React.useState(1);
   const [search, setSearch] = React.useState("");
   const [searchDraft, setSearchDraft] = React.useState("");
@@ -134,9 +137,10 @@ export function BanksOverview() {
       if (seq !== requestSeq.current) return;
       setBanks((response.banks || []).map(toBankInfo));
       setTotal(response.total ?? 0);
+      setFailed(false);
     } catch (error) {
       if (seq !== requestSeq.current) return;
-      console.error("Error loading banks:", error);
+      if (isPageFailure(error)) setFailed(true);
     } finally {
       if (seq === requestSeq.current) setLoading(false);
     }
@@ -228,6 +232,14 @@ export function BanksOverview() {
   // A server with no banks at all gets the greeting it had before this page existed —
   // a search box and an empty table say nothing to someone who has yet to create one.
   // A search that matches nothing still shows the table UI, so the query can be edited.
+  if (!loading && failed && banks.length === 0) {
+    return (
+      <div className="mx-auto w-full max-w-6xl px-6 py-8">
+        <PageError onRetry={() => void fetchPage(page, search)} />
+      </div>
+    );
+  }
+
   if (!loading && total === 0 && !search) {
     return (
       <div className="flex items-center justify-center h-[calc(100dvh-80px)] bg-muted/20">
@@ -301,14 +313,11 @@ export function BanksOverview() {
       </div>
 
       {loading && banks.length === 0 ? (
-        <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
-          <Spinner size="sm" />
-          <span>{tCommon("loading")}</span>
-        </div>
+        <PageLoading label={tCommon("loading")} />
+      ) : failed && banks.length === 0 ? (
+        <PageError onRetry={() => void fetchPage(page, search)} />
       ) : banks.length === 0 ? (
-        <div className="rounded-xl border border-border bg-card py-16 text-center text-muted-foreground">
-          {t("noSearchResults")}
-        </div>
+        <PageEmpty title={t("noSearchResults")} />
       ) : (
         <>
           <Table

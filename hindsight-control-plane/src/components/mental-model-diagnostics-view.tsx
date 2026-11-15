@@ -97,7 +97,7 @@ export function ExecutionTimeline({ trace }: { trace: MentalModelRefreshTrace })
                       {step.isFinal ? (
                         <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
                       ) : (
-                        <span className="text-[10px] font-semibold">{step.iteration}</span>
+                        <span className="text-xs font-semibold">{step.iteration}</span>
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -133,7 +133,7 @@ export function ExecutionTimeline({ trace }: { trace: MentalModelRefreshTrace })
                             </span>
                             <span className="flex items-center gap-2 shrink-0">
                               <span
-                                className={`text-[11px] px-1.5 py-0.5 rounded font-medium ${
+                                className={`text-xs px-1.5 py-0.5 rounded font-medium ${
                                   (tc.result_count ?? 0) === 0
                                     ? "bg-amber-500/15 text-amber-700 dark:text-amber-400"
                                     : "bg-muted text-muted-foreground"
@@ -151,13 +151,13 @@ export function ExecutionTimeline({ trace }: { trace: MentalModelRefreshTrace })
                             {tc.reason && (
                               <p className="text-xs text-muted-foreground italic">{tc.reason}</p>
                             )}
-                            <p className="text-[10px] text-muted-foreground">
+                            <p className="text-xs text-muted-foreground">
                               {tc.updated_at
                                 ? t("toolWindowBound", { time: formatDateTime(tc.updated_at) })
                                 : t("toolWindowUnbounded")}
                             </p>
                             <div>
-                              <p className="text-[10px] font-semibold text-muted-foreground mb-1">
+                              <p className="text-xs font-semibold text-muted-foreground mb-1">
                                 {t("toolInputLabel")}
                               </p>
                               <div className="bg-muted p-1.5 rounded text-xs overflow-auto max-h-32">
@@ -166,7 +166,7 @@ export function ExecutionTimeline({ trace }: { trace: MentalModelRefreshTrace })
                             </div>
                             {tc.output && (
                               <div>
-                                <p className="text-[10px] font-semibold text-muted-foreground mb-1">
+                                <p className="text-xs font-semibold text-muted-foreground mb-1">
                                   {t("toolOutputLabel")}
                                 </p>
                                 <div className="bg-muted p-1.5 rounded text-xs overflow-auto max-h-48">

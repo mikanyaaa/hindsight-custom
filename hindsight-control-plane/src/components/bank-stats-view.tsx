@@ -11,6 +11,8 @@ import { GRAPH_LINK } from "@/custom/theme/graph-palette";
 // CUSTOM-HOOK: theme-quiet-paper-graph-stats end
 import Link from "next/link";
 import { useBank } from "@/lib/bank-context";
+import { isPageFailure } from "@/custom/pages/failure";
+import { PageError, PageLoading } from "@/custom/pages/status";
 import { bankRoute } from "@/lib/bank-url";
 import { Hint } from "@/components/form-layout";
 import { useFeatures } from "@/lib/features-context";
@@ -31,7 +33,6 @@ import {
   RefreshCw,
   ExternalLink,
 } from "lucide-react";
-import { Spinner } from "@/components/ui/spinner";
 import {
   Dialog,
   DialogContent,
@@ -202,12 +203,10 @@ function ChartTooltip({ active, payload, label, valueLabel }: ChartTooltipProps)
   if (!active || !payload || payload.length === 0) return null;
   return (
     <div className="rounded-lg border border-border/60 bg-popover/95 backdrop-blur-sm px-3 py-2 shadow-md">
-      {label != null && (
-        <div className="text-[11px] font-medium text-foreground mb-1.5">{label}</div>
-      )}
+      {label != null && <div className="text-xs font-medium text-foreground mb-1.5">{label}</div>}
       <div className="space-y-1">
         {payload.map((p, i) => (
-          <div key={i} className="flex items-center gap-2 text-[11px]">
+          <div key={i} className="flex items-center gap-2 text-xs">
             <span
               className="w-2 h-2 rounded-[2px]"
               style={{ backgroundColor: p.color || (p.payload as { fill?: string })?.fill }}
@@ -225,7 +224,7 @@ function ChartTooltip({ active, payload, label, valueLabel }: ChartTooltipProps)
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
-    <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] mb-3">
+    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-[0.08em] mb-3">
       {children}
     </h3>
   );
@@ -330,7 +329,7 @@ function Distribution({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em]">
+        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-[0.08em]">
           {title}
         </h4>
         <CompactNumber value={total} className="text-xs text-muted-foreground tabular-nums" />
@@ -359,13 +358,13 @@ function Distribution({
               <div key={d.name} className="space-y-0.5">
                 <div className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-[2px]" style={{ backgroundColor: d.color }} />
-                  <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
+                  <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
                     {d.name}
                   </span>
                 </div>
                 <div className="flex items-baseline gap-1.5">
                   <CompactNumber value={d.value} className="text-base font-semibold tabular-nums" />
-                  <span className="text-[10px] text-muted-foreground tabular-nums">
+                  <span className="text-xs text-muted-foreground tabular-nums">
                     {total > 0 ? `${((d.value / total) * 100).toFixed(0)}%` : "0%"}
                   </span>
                 </div>
@@ -492,7 +491,7 @@ function OperationsCard({ byStatus }: { byStatus: Record<string, number> }) {
                     value={e.value}
                     className="font-semibold tabular-nums text-foreground"
                   />
-                  <span className="text-[10px] text-muted-foreground tabular-nums w-9 text-right">
+                  <span className="text-xs text-muted-foreground tabular-nums w-9 text-right">
                     {((e.value / total) * 100).toFixed(0)}%
                   </span>
                 </div>
@@ -560,7 +559,7 @@ function ConsolidationCard({
           <div className="space-y-0.5">
             <div className="flex items-center gap-1.5">
               <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-              <span className="text-[10px] uppercase tracking-wider whitespace-nowrap text-muted-foreground font-medium">
+              <span className="text-xs uppercase tracking-wider whitespace-nowrap text-muted-foreground font-medium">
                 {t("done")}
               </span>
               <Hint text={t("hintConsolidationDone")} />
@@ -573,7 +572,7 @@ function ConsolidationCard({
           <div className="space-y-0.5">
             <div className="flex items-center gap-1.5">
               <AlertCircle className="w-3 h-3 text-amber-500" />
-              <span className="text-[10px] uppercase tracking-wider whitespace-nowrap text-muted-foreground font-medium">
+              <span className="text-xs uppercase tracking-wider whitespace-nowrap text-muted-foreground font-medium">
                 {t("pending")}
               </span>
               <Hint text={t("hintConsolidationPending")} />
@@ -591,7 +590,7 @@ function ConsolidationCard({
                 }`}
               />
               <span
-                className={`text-[10px] uppercase tracking-wider whitespace-nowrap font-medium ${
+                className={`text-xs uppercase tracking-wider whitespace-nowrap font-medium ${
                   hasFailed ? "text-red-600 dark:text-red-400" : "text-muted-foreground"
                 }`}
               >
@@ -623,7 +622,7 @@ function ConsolidationCard({
           <div className="space-y-0.5">
             <div className="flex items-center gap-1.5">
               <Clock className="w-3 h-3 text-muted-foreground" />
-              <span className="text-[10px] uppercase tracking-wider whitespace-nowrap text-muted-foreground font-medium">
+              <span className="text-xs uppercase tracking-wider whitespace-nowrap text-muted-foreground font-medium">
                 {t("last")}
               </span>
               <Hint text={t("hintConsolidationLast")} />
@@ -825,7 +824,7 @@ function MentalModelsCard({
               <div className="space-y-0.5">
                 <div className="flex items-center gap-1.5">
                   <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                  <span className="text-[10px] uppercase tracking-wider whitespace-nowrap text-muted-foreground font-medium">
+                  <span className="text-xs uppercase tracking-wider whitespace-nowrap text-muted-foreground font-medium">
                     {ts("inSync")}
                   </span>
                   <Hint text={hints.inSync} />
@@ -837,7 +836,7 @@ function MentalModelsCard({
               <div className="space-y-0.5">
                 <div className="flex items-center gap-1.5">
                   <AlertCircle className="w-3 h-3 text-amber-500" />
-                  <span className="text-[10px] uppercase tracking-wider whitespace-nowrap text-muted-foreground font-medium">
+                  <span className="text-xs uppercase tracking-wider whitespace-nowrap text-muted-foreground font-medium">
                     {ts("stale")}
                   </span>
                   <Hint text={hints.stale} />
@@ -854,7 +853,7 @@ function MentalModelsCard({
                     }`}
                   />
                   <span
-                    className={`text-[10px] uppercase tracking-wider whitespace-nowrap font-medium ${
+                    className={`text-xs uppercase tracking-wider whitespace-nowrap font-medium ${
                       hasFailed ? "text-red-600 dark:text-red-400" : "text-muted-foreground"
                     }`}
                   >
@@ -873,7 +872,7 @@ function MentalModelsCard({
               <div className="space-y-0.5">
                 <div className="flex items-center gap-1.5">
                   <Clock className="w-3 h-3 text-muted-foreground" />
-                  <span className="text-[10px] uppercase tracking-wider whitespace-nowrap text-muted-foreground font-medium">
+                  <span className="text-xs uppercase tracking-wider whitespace-nowrap text-muted-foreground font-medium">
                     {t("last")}
                   </span>
                   <Hint text={hints.last} />
@@ -1063,7 +1062,7 @@ export function MemoriesActivityChart({
               <button
                 key={p}
                 onClick={() => setPeriod(p)}
-                className={`px-2 py-0.5 text-[11px] font-medium rounded transition-colors tabular-nums ${
+                className={`px-2 py-0.5 text-xs font-medium rounded transition-colors tabular-nums ${
                   period === p
                     ? "bg-background text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
@@ -1080,7 +1079,7 @@ export function MemoriesActivityChart({
               key={tf}
               onClick={() => setTimeField(tf)}
               title={timeFieldLabels[tf].long}
-              className={`px-2 py-0.5 text-[11px] font-medium rounded transition-colors ${
+              className={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
                 timeField === tf
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
@@ -1099,7 +1098,7 @@ export function MemoriesActivityChart({
                 <button
                   key={k}
                   onClick={() => toggleSeries(k)}
-                  className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium transition-all ${
+                  className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium transition-all ${
                     on
                       ? "bg-muted text-foreground"
                       : "bg-transparent text-muted-foreground/60 hover:text-muted-foreground"
@@ -1195,6 +1194,7 @@ export function BankStatsView() {
   const [stats, setStats] = useState<BankStats | null>(null);
   const [mentalModels, setMentalModels] = useState<MentalModelSummary[]>([]);
   const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   const loadData = async () => {
     if (!currentBank) return;
@@ -1210,8 +1210,9 @@ export function BankStatsView() {
       ]);
       setStats(statsData as BankStats);
       setMentalModels(mentalModelsData);
+      setFailed(false);
     } catch (error) {
-      console.error("Error loading bank stats:", error);
+      if (isPageFailure(error)) setFailed(true);
     } finally {
       setLoading(false);
     }
@@ -1231,11 +1232,11 @@ export function BankStatsView() {
   );
 
   if (loading && !stats) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Spinner size="lg" variant="jump" className="mx-auto mb-3" />
-      </div>
-    );
+    return <PageLoading />;
+  }
+
+  if (failed && !stats) {
+    return <PageError onRetry={() => void loadData()} />;
   }
 
   if (!stats || !currentBank) return null;

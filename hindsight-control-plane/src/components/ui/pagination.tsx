@@ -36,7 +36,7 @@ export function Pagination({ page, pageSize, total, disabled, onPageChange }: Pa
           size="sm"
           onClick={() => onPageChange(1)}
           disabled={page === 1 || disabled}
-          className="h-7 w-7 p-0"
+          className="h-11 w-11 p-0"
         >
           <ChevronsLeft className="h-3 w-3" />
         </Button>
@@ -45,7 +45,7 @@ export function Pagination({ page, pageSize, total, disabled, onPageChange }: Pa
           size="sm"
           onClick={() => onPageChange(page - 1)}
           disabled={page === 1 || disabled}
-          className="h-7 w-7 p-0"
+          className="h-11 w-11 p-0"
         >
           <ChevronLeft className="h-3 w-3" />
         </Button>
@@ -57,7 +57,7 @@ export function Pagination({ page, pageSize, total, disabled, onPageChange }: Pa
           size="sm"
           onClick={() => onPageChange(page + 1)}
           disabled={page === pageCount || disabled}
-          className="h-7 w-7 p-0"
+          className="h-11 w-11 p-0"
         >
           <ChevronRight className="h-3 w-3" />
         </Button>
@@ -66,7 +66,7 @@ export function Pagination({ page, pageSize, total, disabled, onPageChange }: Pa
           size="sm"
           onClick={() => onPageChange(pageCount)}
           disabled={page === pageCount || disabled}
-          className="h-7 w-7 p-0"
+          className="h-11 w-11 p-0"
         >
           <ChevronsRight className="h-3 w-3" />
         </Button>

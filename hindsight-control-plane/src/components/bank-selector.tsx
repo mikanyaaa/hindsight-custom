@@ -733,7 +733,7 @@ function BankSelectorInner() {
                               shown — the display is a convenience, never a disguise. */}
                           {bank.display_alias && (
                             <span
-                              className="shrink-0 truncate max-w-[35%] font-mono text-[11px] text-muted-foreground/60"
+                              className="shrink-0 truncate max-w-[35%] font-mono text-xs text-muted-foreground/60"
                               title={bank.bank_id}
                             >
                               {bank.bank_id}
@@ -744,7 +744,7 @@ function BankSelectorInner() {
                               otherwise look like it does not match what was typed. */}
                           {bank.matched_aliases.length > 0 && (
                             <span
-                              className="shrink-0 truncate max-w-[40%] font-mono text-[11px] text-muted-foreground/70"
+                              className="shrink-0 truncate max-w-[40%] font-mono text-xs text-muted-foreground/70"
                               title={tNavBank("viaAlias", {
                                 aliases: bank.matched_aliases.join(", "),
                               })}
@@ -756,7 +756,7 @@ function BankSelectorInner() {
                             type="button"
                             aria-label={tNavBank("copyName")}
                             title={tNavBank("copyName")}
-                            className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-accent-foreground/10 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity shrink-0"
+                            className="inline-flex h-11 w-11 items-center justify-center rounded hover:bg-accent-foreground/10 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity shrink-0"
                             onMouseDown={(e) => {
                               // Stop cmdk from intercepting before onClick fires.
                               e.stopPropagation();
@@ -772,7 +772,7 @@ function BankSelectorInner() {
                           >
                             <Copy className="h-3.5 w-3.5" />
                           </button>
-                          <span className="shrink-0 tabular-nums text-[11px] text-muted-foreground/70">
+                          <span className="shrink-0 tabular-nums text-xs text-muted-foreground/70">
                             {bank.fact_count > 0 ? (
                               <>
                                 {formatCompact(bank.fact_count)}
@@ -1107,7 +1107,7 @@ function BankSelectorInner() {
                         htmlFor="file-upload"
                         className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-muted-foreground/25 rounded-lg cursor-pointer hover:border-primary/50 hover:bg-accent/50 transition-colors"
                       >
-                        <Upload className="h-8 w-8 text-muted-foreground mb-2" />
+                        <Upload className="h-11 w-11 text-muted-foreground mb-2" />
                         <span className="text-sm text-muted-foreground">
                           {tAddDocument("clickToSelectFiles")}
                         </span>
@@ -1153,7 +1153,7 @@ function BankSelectorInner() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="h-6 w-6 p-0 shrink-0"
+                                    className="h-11 w-11 p-0 shrink-0"
                                     onClick={() => removeFile(index)}
                                   >
                                     <X className="h-4 w-4" />
@@ -1167,7 +1167,7 @@ function BankSelectorInner() {
                                       value={meta.advancedTab}
                                       onValueChange={(v) => updateFileMeta(index, "advancedTab", v)}
                                     >
-                                      <TabsList className="w-full border-b border-border bg-transparent h-8 p-0 gap-0 justify-start rounded-none">
+                                      <TabsList className="w-full border-b border-border bg-transparent h-11 p-0 gap-0 justify-start rounded-none">
                                         {(["document", "tags", "source"] as const).map((t) => (
                                           <TabsTrigger
                                             key={t}
@@ -1191,7 +1191,7 @@ function BankSelectorInner() {
                                                 onChange={(e) =>
                                                   updateFileMeta(index, "timestamp", e.target.value)
                                                 }
-                                                className="h-8 text-sm text-foreground"
+                                                className="h-11 text-sm text-foreground"
                                               />
                                             </div>
                                             <div>
@@ -1208,7 +1208,7 @@ function BankSelectorInner() {
                                                   )
                                                 }
                                                 placeholder={tAddDocument("fileIdPlaceholder")}
-                                                className="h-8 text-sm"
+                                                className="h-11 text-sm"
                                               />
                                             </div>
                                           </div>
@@ -1227,7 +1227,7 @@ function BankSelectorInner() {
                                                   )
                                                 }
                                               >
-                                                <SelectTrigger className="w-full h-8 text-sm">
+                                                <SelectTrigger className="w-full h-11 text-sm">
                                                   <SelectValue />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -1250,7 +1250,7 @@ function BankSelectorInner() {
                                                   updateFileMeta(index, "strategy", e.target.value)
                                                 }
                                                 placeholder={tAddDocument("strategyPlaceholder")}
-                                                className="h-8 text-sm"
+                                                className="h-11 text-sm"
                                               />
                                             )}
                                           </div>
@@ -1266,7 +1266,7 @@ function BankSelectorInner() {
                                                 updateFileMeta(index, "tags", e.target.value)
                                               }
                                               placeholder={tAddDocument("fileTagsPlaceholder")}
-                                              className="h-8 text-sm"
+                                              className="h-11 text-sm"
                                             />
                                             <p className="text-xs text-muted-foreground mt-1">
                                               {tAddDocument("fileTagsHelp")}
@@ -1284,7 +1284,7 @@ function BankSelectorInner() {
                                                 updateFileMeta(index, "context", e.target.value)
                                               }
                                               placeholder={tAddDocument("fileContextPlaceholder")}
-                                              className="h-8 text-sm"
+                                              className="h-11 text-sm"
                                             />
                                           </div>
                                           <div>
@@ -1341,7 +1341,7 @@ function BankSelectorInner() {
                     value={docAdvancedTab}
                     onValueChange={(v) => setDocAdvancedTab(v as "document" | "tags" | "source")}
                   >
-                    <TabsList className="w-full border-b border-border bg-transparent h-8 p-0 gap-0 justify-start rounded-none">
+                    <TabsList className="w-full border-b border-border bg-transparent h-11 p-0 gap-0 justify-start rounded-none">
                       <TabsTrigger
                         value="document"
                         className="rounded-none h-full px-4 text-xs font-medium bg-transparent shadow-none text-muted-foreground hover:text-foreground data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary -mb-px"

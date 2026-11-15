@@ -57,7 +57,7 @@ export function ResponseSchemaField({
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7"
+              className="h-11 w-11"
               onClick={() => onChange("")}
               aria-label={t("clear")}
             >
@@ -75,7 +75,7 @@ export function ResponseSchemaField({
           {info.names.slice(0, 8).map((name) => (
             <span
               key={name}
-              className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground"
+              className="text-xs font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground"
             >
               {name}
             </span>

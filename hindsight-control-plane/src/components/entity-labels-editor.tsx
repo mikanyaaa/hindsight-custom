@@ -196,7 +196,7 @@ function MapFieldsEditor({
             {/* Example badge — only at root level to avoid clutter */}
             {isRoot && examplePrefix && fieldName && (
               <div className="ml-[18px] pl-1.5">
-                <span className="text-[10px] font-mono text-muted-foreground/60 leading-none">
+                <span className="text-xs font-mono text-muted-foreground/60 leading-none">
                   {exampleBadge(examplePrefix, field)}
                 </span>
               </div>
@@ -216,11 +216,11 @@ function MapFieldsEditor({
             {isOpen && hasEnum && (
               <div className="ml-6 space-y-0.5 py-1">
                 {(field.values ?? []).length === 0 && (
-                  <p className="text-[11px] text-muted-foreground italic">{t("noValuesYet")}</p>
+                  <p className="text-xs text-muted-foreground italic">{t("noValuesYet")}</p>
                 )}
                 {(field.values ?? []).map((v, vi) => (
                   <div key={vi} className="flex items-center gap-1.5 group/val">
-                    <span className="text-muted-foreground/50 text-[10px] shrink-0">&#x2022;</span>
+                    <span className="text-muted-foreground/50 text-xs shrink-0">&#x2022;</span>
                     <Input
                       placeholder={t("addValueShort")}
                       value={v.value}
@@ -229,7 +229,7 @@ function MapFieldsEditor({
                         newValues[vi] = { ...v, value: e.target.value };
                         updateField(fieldName, { values: newValues });
                       }}
-                      className="h-6 text-[11px] font-mono w-24 shrink-0 border-dashed"
+                      className="h-11 text-xs font-mono w-24 shrink-0 border-dashed"
                     />
                     <Input
                       placeholder={t("extractorHintWhichPlaceholder")}
@@ -239,7 +239,7 @@ function MapFieldsEditor({
                         newValues[vi] = { ...v, description: e.target.value };
                         updateField(fieldName, { values: newValues });
                       }}
-                      className="h-6 text-[11px] flex-1 min-w-0 border-dashed"
+                      className="h-11 text-xs flex-1 min-w-0 border-dashed"
                     />
                     <button
                       type="button"
@@ -259,7 +259,7 @@ function MapFieldsEditor({
                     const newValues = [...(field.values ?? []), { value: "", description: "" }];
                     updateField(fieldName, { values: newValues });
                   }}
-                  className="text-[11px] text-muted-foreground/60 hover:text-foreground inline-flex items-center gap-1 ml-2.5"
+                  className="text-xs text-muted-foreground/60 hover:text-foreground inline-flex items-center gap-1 ml-2.5"
                 >
                   <Plus className="h-2.5 w-2.5" />
                   {t("addValueShort")}

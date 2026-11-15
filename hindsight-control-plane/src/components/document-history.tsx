@@ -144,7 +144,7 @@ export function DocumentHistory({ bankId, documentId }: { bankId: string; docume
         onClick={() => setOpenId(id)}
         onMouseEnter={() => setHoverId(id)}
         onMouseLeave={() => setHoverId(null)}
-        className={`text-[10px] px-1.5 py-0.5 rounded-md border font-mono ${ID_CHIP[role]} ${
+        className={`text-xs px-1.5 py-0.5 rounded-md border font-mono ${ID_CHIP[role]} ${
           hoverId === id ? "ring-1 ring-primary" : ""
         } ${laterRemoval ? LATER_REMOVED : ""} ${gone ? "cursor-default" : "hover:underline"}`}
       >

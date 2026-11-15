@@ -7,6 +7,8 @@ import { formatAbsoluteDateTime, formatRelativeTime } from "@/lib/relative-time"
 import { CompactMarkdown } from "./compact-markdown";
 import { downloadMarkdown, mentalModelDownload, printPage } from "@/lib/page-download";
 import { useBank } from "@/lib/bank-context";
+import { isPageFailure } from "@/custom/pages/failure";
+import { PageEmpty, PageError, PageLoading } from "@/custom/pages/status";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -34,7 +36,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Plus,
-  Sparkles,
   Trash2,
   Download,
   Eraser,
@@ -135,6 +136,7 @@ export function MentalModelsView() {
   const { currentBank } = useBank();
   const [mentalModels, setMentalModels] = useState<MentalModel[]>([]);
   const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("files");
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -176,6 +178,7 @@ export function MentalModelsView() {
     if (!currentBank) return;
 
     setLoading(true);
+    setFailed(false);
     try {
       // The API caps each response, so page through to the reported total.
       // detail=content is explicit: the list endpoint defaults to metadata, and
@@ -189,7 +192,7 @@ export function MentalModelsView() {
       });
       setMentalModels(all);
     } catch (error) {
-      console.error("Error loading mental models:", error);
+      if (isPageFailure(error)) setFailed(true);
     } finally {
       setLoading(false);
     }
@@ -306,10 +309,9 @@ export function MentalModelsView() {
   return (
     <div>
       {loading ? (
-        <div className="text-center py-12">
-          <Spinner size="lg" variant="jump" className="mx-auto mb-3" />
-          <p className="text-muted-foreground">{t("loading")}</p>
-        </div>
+        <PageLoading label={t("loading")} />
+      ) : failed && mentalModels.length === 0 ? (
+        <PageError onRetry={() => void loadData()} />
       ) : (
         <>
           {/* Search + tag filter (single row) */}
@@ -319,7 +321,7 @@ export function MentalModelsView() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={t("filterPlaceholder")}
-              className="w-80 h-9"
+              className="w-full sm:w-80 h-11"
             />
             <TagFilterInput
               value={selectedTags}
@@ -334,7 +336,7 @@ export function MentalModelsView() {
               onMatchModeChange={setTagsMatch}
               className="flex-1 min-w-[260px]"
             />
-            <label className="flex items-center gap-2 h-9 text-sm text-muted-foreground">
+            <label className="flex items-center gap-2 h-11 text-sm text-muted-foreground">
               <Switch checked={hideKnowledgePages} onCheckedChange={setHideKnowledgePages} />
               {t("hideKnowledgePages")}
             </label>
@@ -437,7 +439,7 @@ export function MentalModelsView() {
                               onDelete={(target) =>
                                 setDeleteTarget({ id: target.id, name: target.name })
                               }
-                              triggerClassName="h-7 w-7 ml-2 flex-shrink-0"
+                              triggerClassName="h-11 w-11 ml-2 flex-shrink-0"
                             />
                           </div>
                           <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
@@ -512,7 +514,7 @@ export function MentalModelsView() {
                       size="sm"
                       onClick={() => setCurrentPage(1)}
                       disabled={currentPage === 1}
-                      className="h-7 w-7 p-0"
+                      className="h-11 w-11 p-0"
                     >
                       <ChevronsLeft className="h-3 w-3" />
                     </Button>
@@ -521,7 +523,7 @@ export function MentalModelsView() {
                       size="sm"
                       onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                       disabled={currentPage === 1}
-                      className="h-7 w-7 p-0"
+                      className="h-11 w-11 p-0"
                     >
                       <ChevronLeft className="h-3 w-3" />
                     </Button>
@@ -533,7 +535,7 @@ export function MentalModelsView() {
                       size="sm"
                       onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                       disabled={currentPage === totalPages}
-                      className="h-7 w-7 p-0"
+                      className="h-11 w-11 p-0"
                     >
                       <ChevronRight className="h-3 w-3" />
                     </Button>
@@ -542,7 +544,7 @@ export function MentalModelsView() {
                       size="sm"
                       onClick={() => setCurrentPage(totalPages)}
                       disabled={currentPage === totalPages}
-                      className="h-7 w-7 p-0"
+                      className="h-11 w-11 p-0"
                     >
                       <ChevronsRight className="h-3 w-3" />
                     </Button>
@@ -551,12 +553,7 @@ export function MentalModelsView() {
               )}
             </>
           ) : (
-            <div className="p-6 border border-dashed border-border rounded-lg text-center">
-              <Sparkles className="w-6 h-6 mx-auto mb-2 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">
-                {searchQuery ? t("emptyFilterMatch") : t("emptyNoModels")}
-              </p>
-            </div>
+            <PageEmpty title={searchQuery ? t("emptyFilterMatch") : t("emptyNoModels")} />
           )}
         </>
       )}
@@ -704,7 +701,7 @@ function RowActionsMenu({
         <Button
           variant="ghost"
           size="sm"
-          className={`p-0 text-muted-foreground ${triggerClassName ?? "h-8 w-8"}`}
+          className={`p-0 text-muted-foreground ${triggerClassName ?? "h-11 w-11"}`}
           onClick={(e) => e.stopPropagation()}
           aria-label={t("actionsAriaLabel")}
         >
@@ -1161,7 +1158,7 @@ function FilesView({
                         className="ml-auto"
                       />
                       <span
-                        className="text-[10px] text-muted-foreground flex-shrink-0"
+                        className="text-xs text-muted-foreground flex-shrink-0"
                         title={formatAbsoluteDateTime(m.last_refreshed_at)}
                       >
                         {formatRelativeTime(m.last_refreshed_at, locale)}
@@ -1172,7 +1169,7 @@ function FilesView({
                         {m.source_query}
                       </div>
                     )}
-                    <div className="text-[10px] text-muted-foreground/70 truncate mt-0.5">
+                    <div className="text-xs text-muted-foreground/70 truncate mt-0.5">
                       {t("nextRefreshLabel")}:{" "}
                       <NextRefresh
                         trigger={m.trigger}

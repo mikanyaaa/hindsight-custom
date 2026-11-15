@@ -202,7 +202,7 @@ function CronField({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={t("optionsRefreshCronPlaceholder")}
-          className="h-8 flex-1 min-w-[12rem] font-mono text-sm"
+          className="h-11 flex-1 min-w-[12rem] font-mono text-sm"
         />
         {presets.map((preset) => (
           <button
@@ -346,7 +346,7 @@ export function MentalModelTriggerFields({
                 value={form.minRefreshIntervalSeconds}
                 onChange={(e) => setForm({ ...form, minRefreshIntervalSeconds: e.target.value })}
                 placeholder={t("optionsMinRefreshIntervalPlaceholder")}
-                className="h-8 pr-16"
+                className="h-11 pr-16"
               />
               <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground">
                 {t("triggerSeconds")}
@@ -449,7 +449,7 @@ export function MentalModelTriggerFields({
             value={form.tagsMatch || "default"}
             onValueChange={(v) => setForm({ ...form, tagsMatch: v === "default" ? "" : v })}
           >
-            <SelectTrigger className="h-8">
+            <SelectTrigger className="h-11">
               <SelectValue placeholder={t("optionsTagsMatchDefaultPlaceholder")} />
             </SelectTrigger>
             <SelectContent>
@@ -482,7 +482,7 @@ export function MentalModelTriggerFields({
                 value={form.excludeMentalModelIds}
                 onChange={(e) => setForm({ ...form, excludeMentalModelIds: e.target.value })}
                 placeholder={t("optionsExcludeIdsPlaceholder")}
-                className="h-8"
+                className="h-11"
               />
             </Row>
             <Row label={t("optionsIncludeChunksLabel")} description={t("triggerHelpIncludeChunks")}>
@@ -495,7 +495,7 @@ export function MentalModelTriggerFields({
                   })
                 }
               >
-                <SelectTrigger className="h-8">
+                <SelectTrigger className="h-11">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -517,7 +517,7 @@ export function MentalModelTriggerFields({
                 value={form.recallMaxTokens}
                 onChange={(e) => setForm({ ...form, recallMaxTokens: e.target.value })}
                 placeholder={t("optionsRecallMaxTokensPlaceholder")}
-                className="h-8"
+                className="h-11"
               />
             </Row>
             <Row
@@ -532,7 +532,7 @@ export function MentalModelTriggerFields({
                 value={form.recallChunksMaxTokens}
                 onChange={(e) => setForm({ ...form, recallChunksMaxTokens: e.target.value })}
                 placeholder={t("optionsRecallChunksMaxTokensPlaceholder")}
-                className="h-8"
+                className="h-11"
               />
             </Row>
             <Row
@@ -547,7 +547,7 @@ export function MentalModelTriggerFields({
                 value={form.observationsMaxTokens}
                 onChange={(e) => setForm({ ...form, observationsMaxTokens: e.target.value })}
                 placeholder={t("optionsRecallMaxTokensPlaceholder")}
-                className="h-8"
+                className="h-11"
               />
             </Row>
             <Row
@@ -563,7 +563,7 @@ export function MentalModelTriggerFields({
                   })
                 }
               >
-                <SelectTrigger className="h-8">
+                <SelectTrigger className="h-11">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -583,7 +583,7 @@ export function MentalModelTriggerFields({
                   })
                 }
               >
-                <SelectTrigger className="h-8">
+                <SelectTrigger className="h-11">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
