@@ -8,6 +8,15 @@ import { bankApi, bankStatsApi, chunkApi, documentApi, memoryApi } from "./bank-
 import { SESSION_REQUIRED_HEADER } from "./auth/session";
 import { stripBasePath, withBasePath } from "./base-path";
 import { appendTagFilter, type TagFilter, type TagsMatch } from "./tag-filter-params";
+// CUSTOM-HOOK: client-guard-fetch begin
+import {
+  RequestTimeoutError,
+  SessionExpiredError,
+  UI_FETCH_TIMEOUT_MS,
+  browserFetch,
+} from "@/custom/client-guard/browser-fetch";
+import { clearRequestTimeout, reportRequestTimeout } from "@/custom/client-guard/state";
+// CUSTOM-HOOK: client-guard-fetch end
 
 /**
  * Reduce an API error `details` value to a string safe to render in a toast.
@@ -477,13 +486,17 @@ export class ControlPlaneClient {
     { suppressErrorToast = false }: { suppressErrorToast?: boolean } = {}
   ): Promise<T> {
     try {
-      const response = await fetch(withBasePath(path), {
-        ...options,
-        headers: {
-          "Content-Type": "application/json",
-          ...options?.headers,
+      const response = await browserFetch(
+        withBasePath(path),
+        {
+          ...options,
+          headers: {
+            "Content-Type": "application/json",
+            ...options?.headers,
+          },
         },
-      });
+        UI_FETCH_TIMEOUT_MS
+      );
 
       if (!response.ok) {
         const isClientError = response.status >= 400 && response.status < 500;
@@ -559,10 +572,18 @@ export class ControlPlaneClient {
         throw error;
       }
 
+      clearRequestTimeout();
       return response.json();
     } catch (error) {
-      // If it's not a response error (network error, etc.), show toast. A request
+      // An expired upstream session and a timeout have their own states. A request
       // the caller cancelled is not an error worth telling anyone about.
+      if (error instanceof SessionExpiredError) throw error;
+      if (error instanceof RequestTimeoutError) {
+        reportRequestTimeout(() => {
+          void this.fetchApi(path, options, { suppressErrorToast });
+        });
+        throw error;
+      }
       const aborted = (error as any)?.name === "AbortError";
       if (!(error as any).status && !suppressErrorToast && !aborted) {
         toast.error("Network Error", {
