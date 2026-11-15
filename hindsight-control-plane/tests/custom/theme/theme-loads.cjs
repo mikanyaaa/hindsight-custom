@@ -9,7 +9,7 @@ const { join } = require("node:path");
 const { chromium } = require("playwright");
 
 async function main() {
-  const css = readFileSync(join(__dirname, "../../../src/custom/theme/warm-glass.css"), "utf8");
+  const css = readFileSync(join(__dirname, "../../../src/custom/theme/tokens.css"), "utf8");
   const browser = await chromium.launch();
   const page = await browser.newPage();
   const errors = [];
@@ -18,7 +18,7 @@ async function main() {
     if (message.type() === "error") errors.push(message.text());
   });
   const html = `<!doctype html>
-<html data-theme-layer="warm-glass">
+<html data-theme="quiet-paper">
   <head><style>${css}</style></head>
   <body><main>Hindsight</main></body>
 </html>`;
@@ -28,7 +28,7 @@ async function main() {
     "getComputedStyle(document.documentElement).getPropertyValue('--background').trim()"
   );
   await browser.close();
-  if (background !== "#f3ede6") errors.push(`theme variable was ${background || "empty"}`);
+  if (background !== "#faf9f7") errors.push(`theme variable was ${background || "empty"}`);
   if (errors.length) {
     console.error(errors.join("\n"));
     process.exit(1);
