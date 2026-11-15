@@ -165,6 +165,9 @@ is limited to dialogs, menus and popovers. `main` and `aside` stay sharp. The
 parser-blocking inline script, so the first paint is not the old blue palette.
 The bank frame is a 232px rail (collapse saved on the `hs-sidebar` cookie), a
 command menu in the top bar, and a solid bottom tab bar on phones.
+Buttons, fields, cards, menus and badges take their size from that scale:
+6px for badges and menu items, 10px for controls, 14px for panels, type from
+12px, and a 44px control height.
 
 With Playwright available, run `node tests/custom/theme/layering-browser.cjs` from
 `hindsight-control-plane/` for light/dark checks at 390, 768 and 1440px.
@@ -178,6 +181,21 @@ With Playwright available, run `node tests/custom/theme/layering-browser.cjs` fr
 | `src/components/sidebar.tsx`  | `frame-quiet-paper-rail`                            | 232px rail, saved collapse, phone drawer optional.              |
 | `src/app/[locale]/banks/[bankId]/page.tsx` | `frame-quiet-paper-shell`              | Bottom tab bar and room for it under the page.                  |
 | `src/components/bank-selector.tsx` | `frame-quiet-paper-bar`                       | Command menu and a 44px theme control in the top bar.           |
+| `src/components/ui/button.tsx` | `primitive-quiet-paper-button`                    | 44px buttons, 10px radius, 14px type.                            |
+| `src/components/ui/input.tsx` | `primitive-quiet-paper-input`                     | Fields match the button height and type.                        |
+| `src/components/ui/textarea.tsx` | `primitive-quiet-paper-textarea`               | Same field chrome, room to write.                                |
+| `src/components/ui/select.tsx` | `primitive-quiet-paper-select`                   | Select trigger, menu and items on the same scale.                |
+| `src/components/ui/card.tsx` | `primitive-quiet-paper-card`                       | 14px panel, hairline border.                                     |
+| `src/components/ui/table.tsx` | `primitive-quiet-paper-table`                     | 14px frame and 12px column labels.                               |
+| `src/components/ui/facet-chip.tsx` | `primitive-quiet-paper-chip`                 | Chips use 12px and up.                                           |
+| `src/components/staleness-badge.tsx` | `primitive-quiet-paper-badge`               | Freshness badge is 12px on a 6px radius.                         |
+| `src/components/ui/dialog.tsx` | `primitive-quiet-paper-dialog`                   | Dialog panel is 14px, close control is 44px.                     |
+| `src/components/ui/alert-dialog.tsx` | `primitive-quiet-paper-alert`               | Alert panel matches the dialog.                                  |
+| `src/components/ui/dropdown-menu.tsx` | `primitive-quiet-paper-menu`              | Menu items are 44px on a 14px panel.                             |
+| `src/components/ui/popover.tsx` | `primitive-quiet-paper-popover`                 | Popover uses the panel radius, no blue edge.                     |
+| `src/components/ui/command.tsx` | `primitive-quiet-paper-command`                 | Command rows match the menu items.                               |
+| `src/components/ui/checkbox.tsx` | `primitive-quiet-paper-check`                  | Unchecked box uses the ink, not the old blue.                    |
+| `src/components/ui/inline-attachment-text.tsx` | `primitive-quiet-paper-attachment` | Attachment labels stay on the type scale.                 |
 
-The recursive registry accepts registered `brain-`, `theme-` and `frame-` namespaces, with
+The recursive registry accepts registered `brain-`, `theme-`, `frame-` and `primitive-` namespaces, with
 unique paired markers and exact file matching.

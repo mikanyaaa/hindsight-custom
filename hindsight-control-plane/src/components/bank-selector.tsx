@@ -834,7 +834,7 @@ function BankSelectorInner() {
           <Button
             variant="outline"
             size="sm"
-            className="h-9 shrink-0 gap-1.5 px-2.5 sm:px-3"
+            className="shrink-0 gap-1.5 px-2.5 sm:px-3"
             onClick={() => setDocDialogOpen(true)}
             title={tAddDocument("addDocumentToCurrentBank")}
             aria-label={tAddDocument("addDocumentButton")}
@@ -854,7 +854,7 @@ function BankSelectorInner() {
             <Button
               variant="ghost"
               size="icon"
-              className="md:hidden h-9 w-9 shrink-0 ml-auto"
+              className="md:hidden shrink-0 ml-auto"
               aria-label={tNav("more")}
               title={tNav("more")}
             >
@@ -936,7 +936,7 @@ function BankSelectorInner() {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-9 w-9"
+                className="shrink-0"
                 title="Logout"
                 onClick={logout}
               >
@@ -1687,7 +1687,7 @@ export function BankSelector() {
                 <span className="text-sm font-medium">GitHub</span>
               </a>
               <div className="h-8 w-px bg-border" />
-              <Button variant="ghost" size="icon" className="h-9 w-9" disabled>
+              <Button variant="ghost" size="icon" disabled>
                 <Moon className="h-5 w-5" />
               </Button>
             </div>

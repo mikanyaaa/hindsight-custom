@@ -1,6 +1,9 @@
 import * as React from "react";
 
 import { cn } from "@/lib/utils";
+// CUSTOM-HOOK: primitive-quiet-paper-table begin
+import { menuLabelClass } from "@/custom/primitives/classes";
+// CUSTOM-HOOK: primitive-quiet-paper-table end
 
 // Every table in the app goes through this one. On a phone the frame scrolls
 // sideways and the table keeps a 40rem floor: without it, a `table-fixed` table
@@ -9,7 +12,7 @@ import { cn } from "@/lib/utils";
 // can opt out with `min-w-0`.
 const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
   ({ className, ...props }, ref) => (
-    <div className="relative w-full overflow-auto rounded-xl ring-1 ring-border/60 bg-card">
+    <div className="relative w-full overflow-auto rounded-lg ring-1 ring-border/60 bg-card">
       <table
         ref={ref}
         className={cn(
@@ -52,7 +55,7 @@ const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTML
     <tr
       ref={ref}
       className={cn(
-        "transition-colors hover:bg-muted/40 data-[state=selected]:bg-muted/60",
+        "transition-colors motion-reduce:transition-none hover:bg-muted/40 data-[state=selected]:bg-muted/60",
         className
       )}
       {...props}
@@ -68,7 +71,8 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      "h-9 px-4 text-left align-middle text-[11px] font-semibold uppercase tracking-wider text-muted-foreground border-b border-border/60 [&:has([role=checkbox])]:pr-0",
+      "h-11 px-4 text-left align-middle font-semibold uppercase border-b border-border/60 [&:has([role=checkbox])]:pr-0",
+      menuLabelClass,
       className
     )}
     {...props}
