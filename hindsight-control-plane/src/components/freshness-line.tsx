@@ -1,6 +1,6 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { formatAbsoluteDateTime, formatRelativeTime, formatWatermark } from "@/lib/relative-time";
 import { cn } from "@/lib/utils";
 import { NextRefresh } from "./next-refresh";
@@ -62,6 +62,9 @@ export function FreshnessLine({
   className?: string;
 }) {
   const t = useTranslations("mentalModels");
+  // CUSTOM-HOOK: relative-time-freshness begin
+  const locale = useLocale();
+  // CUSTOM-HOOK: relative-time-freshness end
 
   const factTypes = trigger?.fact_types?.length ? trigger.fact_types.join(", ") : null;
 
@@ -83,7 +86,7 @@ export function FreshnessLine({
         <>
           {(refreshFailedAt || attempt || (isStale !== null && isStale !== undefined)) && <Sep />}
           <span title={formatAbsoluteDateTime(lastRefreshedAt)}>
-            {t("freshnessRefreshed", { time: formatRelativeTime(lastRefreshedAt) })}
+            {t("freshnessRefreshed", { time: formatRelativeTime(lastRefreshedAt, locale) })}
           </span>
         </>
       )}

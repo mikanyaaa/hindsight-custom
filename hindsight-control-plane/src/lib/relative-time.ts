@@ -1,8 +1,31 @@
-export function formatRelativeTime(dateStr: string): string {
+import { defaultLocale } from "@/i18n/config";
+
+const INVALID_TIME = "—";
+
+// CUSTOM-HOOK: relative-time-locale begin
+function relativeFormatter(locale: string): Intl.RelativeTimeFormat {
+  const candidates = [locale, defaultLocale, "en"];
+  for (const candidate of candidates) {
+    try {
+      return new Intl.RelativeTimeFormat(candidate, { numeric: "auto" });
+    } catch {
+      // An unknown tag (or a locale this runtime cannot format) falls through.
+    }
+  }
+  return new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+}
+
+export function formatRelativeTime(
+  dateStr: string | null | undefined,
+  locale: string = defaultLocale
+): string {
+  if (!dateStr) return INVALID_TIME;
   const then = new Date(dateStr).getTime();
+  if (!Number.isFinite(then)) return INVALID_TIME;
   const diffSec = Math.round((Date.now() - then) / 1000);
   const abs = Math.abs(diffSec);
-  if (abs < 60) return diffSec >= 0 ? "just now" : "in a moment";
+  const formatter = relativeFormatter(locale);
+  if (abs < 60) return formatter.format(-diffSec, "second");
   // value starts in seconds; each step divides by `factor` to reach `nextUnit`.
   // (Previously the first pair was mislabeled [60, "second"], which left every
   // unit one step too low — e.g. 8 minutes rendered as "in 8 seconds".)
@@ -21,8 +44,9 @@ export function formatRelativeTime(dateStr: string): string {
     value = value / factor;
     unit = nextUnit;
   }
-  return new Intl.RelativeTimeFormat("en", { numeric: "auto" }).format(-Math.round(value), unit);
+  return formatter.format(-Math.round(value), unit);
 }
+// CUSTOM-HOOK: relative-time-locale end
 
 export function formatAbsoluteDateTime(dateStr: string): string {
   const date = new Date(dateStr);

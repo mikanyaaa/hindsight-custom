@@ -4,6 +4,7 @@ import * as React from "react";
 import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { formatRelativeTime } from "@/lib/relative-time";
 import { useBank } from "@/lib/bank-context";
 import { bankRoute } from "@/lib/bank-url";
 import { hoistCurrentBank } from "@/lib/bank-order";
@@ -99,19 +100,10 @@ function toIsoTimestamp(value: string): string {
   return value.includes("T") ? value : `${value}T00:00:00`;
 }
 
-function formatTimeAgo(isoDate: string): string {
-  const diff = Date.now() - new Date(isoDate).getTime();
-  const seconds = Math.floor(diff / 1000);
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  const months = Math.floor(days / 30);
-  if (months < 12) return `${months}mo ago`;
-  return `${Math.floor(months / 12)}y ago`;
+function formatTimeAgo(isoDate: string, locale: string): string {
+  // CUSTOM-HOOK: relative-time-selector begin
+  return formatRelativeTime(isoDate, locale);
+  // CUSTOM-HOOK: relative-time-selector end
 }
 
 function BankSelectorInner() {
@@ -785,7 +777,7 @@ function BankSelectorInner() {
                               <>
                                 {formatCompact(bank.fact_count)}
                                 <span className="ml-1.5 text-muted-foreground/40">
-                                  {lastWriteAt ? formatTimeAgo(lastWriteAt) : ""}
+                                  {lastWriteAt ? formatTimeAgo(lastWriteAt, locale) : ""}
                                 </span>
                               </>
                             ) : (

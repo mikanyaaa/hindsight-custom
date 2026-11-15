@@ -1,7 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useTranslations } from "next-intl";
+import { useCallback, useState, useEffect } from "react";
+import { useLocale, useTranslations } from "next-intl";
+import { formatRelativeTime as formatLocaleRelativeTime } from "@/lib/relative-time";
+// CUSTOM-HOOK: visible-poll-stats begin
+import { useVisiblePoll } from "@/custom/perf/use-visible-poll";
+// CUSTOM-HOOK: visible-poll-stats end
 import Link from "next/link";
 import { useBank } from "@/lib/bank-context";
 import { bankRoute } from "@/lib/bank-url";
@@ -234,16 +238,11 @@ type RelativeTimeTranslator = (
   values?: Record<string, number>
 ) => string;
 
-function formatRelativeTime(ts: string | null, t?: RelativeTimeTranslator): string {
-  if (!ts) return t ? t("relativeTimeNever") : "Never";
-  const diff = Date.now() - new Date(ts).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return t ? t("relativeTimeJustNow") : "just now";
-  if (mins < 60) return t ? t("relativeTimeMinutes", { mins }) : `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return t ? t("relativeTimeHours", { hours }) : `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return t ? t("relativeTimeDays", { days }) : `${days}d ago`;
+function formatRelativeTime(ts: string | null, locale: string, t?: RelativeTimeTranslator): string {
+  // CUSTOM-HOOK: relative-time-stats begin
+  if (!ts) return t ? t("relativeTimeNever") : "—";
+  return formatLocaleRelativeTime(ts, locale);
+  // CUSTOM-HOOK: relative-time-stats end
 }
 
 // Bucket timestamps arrive from the memories-timeseries endpoint, which is
@@ -545,6 +544,7 @@ function ConsolidationCard({
   href: string;
 }) {
   const t = useTranslations("bankStats");
+  const locale = useLocale();
   const [failedOpen, setFailedOpen] = useState(false);
   const hasFailed = failed > 0;
 
@@ -626,7 +626,7 @@ function ConsolidationCard({
               <Hint text={t("hintConsolidationLast")} />
             </div>
             <span className="text-base font-semibold text-foreground block leading-tight">
-              {formatRelativeTime(lastConsolidatedAt, t as RelativeTimeTranslator)}
+              {formatRelativeTime(lastConsolidatedAt, locale, t as RelativeTimeTranslator)}
             </span>
           </div>
         </div>
@@ -652,6 +652,7 @@ function FailedConsolidationsDialog({
   onOpenChange: (value: boolean) => void;
 }) {
   const t = useTranslations("bankStats");
+  const locale = useLocale();
   const tFailed = useTranslations("failedConsolidations");
   const { currentBank } = useBank();
   const [items, setItems] = useState<FailedMemoryItem[]>([]);
@@ -739,7 +740,11 @@ function FailedConsolidationsDialog({
               {items.map((row) => (
                 <TableRow key={row.id}>
                   <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                    {formatRelativeTime(row.consolidation_failed_at, t as RelativeTimeTranslator)}
+                    {formatRelativeTime(
+                      row.consolidation_failed_at,
+                      locale,
+                      t as RelativeTimeTranslator
+                    )}
                   </TableCell>
                   <TableCell className="text-xs capitalize">{row.fact_type}</TableCell>
                   <TableCell className="text-sm">
@@ -778,6 +783,7 @@ function MentalModelsCard({
   hints: { inSync: string; stale: string; failed: string; last: string };
 }) {
   const t = useTranslations("bankStats");
+  const locale = useLocale();
   // The counts use the shared staleness vocabulary so the tile, the tree and the
   // model dialog all say the same word for the same boolean.
   const ts = useTranslations("staleness");
@@ -870,7 +876,7 @@ function MentalModelsCard({
                   <Hint text={hints.last} />
                 </div>
                 <span className="text-base font-semibold text-foreground block leading-tight">
-                  {formatRelativeTime(lastRefreshedAt, t as RelativeTimeTranslator)}
+                  {formatRelativeTime(lastRefreshedAt, locale, t as RelativeTimeTranslator)}
                 </span>
               </div>
             </div>
@@ -998,20 +1004,28 @@ export function MemoriesActivityChart({
     observation: true,
   });
 
-  useEffect(() => {
+  const loadTimeseries = useCallback(async () => {
     if (!bankId) return;
-    const load = async () => {
-      try {
-        const data = await client.getMemoriesTimeseries(bankId, period, timeField);
-        setTimeseries({ trunc: data.trunc, buckets: data.buckets || [] });
-      } catch (error) {
-        console.error("Error loading memories timeseries:", error);
-      }
-    };
-    load();
-    const interval = setInterval(load, 5000);
-    return () => clearInterval(interval);
+    try {
+      const data = await client.getMemoriesTimeseries(bankId, period, timeField);
+      setTimeseries({ trunc: data.trunc, buckets: data.buckets || [] });
+    } catch (error) {
+      console.error("Error loading memories timeseries:", error);
+    }
   }, [bankId, period, timeField]);
+
+  useEffect(() => {
+    void loadTimeseries();
+  }, [loadTimeseries]);
+
+  // CUSTOM-HOOK: visible-poll-timeseries begin
+  useVisiblePoll(
+    () => {
+      void loadTimeseries();
+    },
+    bankId ? 5000 : null
+  );
+  // CUSTOM-HOOK: visible-poll-timeseries end
 
   const factSeries: FactKey[] = observationsEnabled
     ? ["world", "experience", "observation"]
@@ -1203,10 +1217,15 @@ export function BankStatsView() {
   useEffect(() => {
     if (currentBank) {
       loadData();
-      const interval = setInterval(loadData, 5000);
-      return () => clearInterval(interval);
     }
   }, [currentBank]);
+
+  useVisiblePoll(
+    () => {
+      if (currentBank) void loadData();
+    },
+    currentBank ? 5000 : null
+  );
 
   if (loading && !stats) {
     return (

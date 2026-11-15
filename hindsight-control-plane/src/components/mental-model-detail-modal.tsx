@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { client, MentalModel, MentalModelDryRunRefreshResult } from "@/lib/api";
 import { useBank } from "@/lib/bank-context";
 import { useRefreshAttempts } from "@/lib/use-refresh-attempts";
@@ -170,6 +170,9 @@ function RefreshErrorTimeline({
   paused: boolean;
 }) {
   const t = useTranslations("mentalModelDetailModal");
+  // CUSTOM-HOOK: relative-time-model-detail begin
+  const locale = useLocale();
+  // CUSTOM-HOOK: relative-time-model-detail end
   const reasonLabels: Record<RefreshFailureReason, string> = {
     retrieval_failed: t("failureReasonRetrievalFailed"),
     no_answer: t("failureReasonNoAnswer"),
@@ -220,7 +223,7 @@ function RefreshErrorTimeline({
                     : formatDateTime(g.entry.changed_at)
                 }
               >
-                &middot; {formatRelativeTime(g.entry.changed_at)}
+                &middot; {formatRelativeTime(g.entry.changed_at, locale)}
               </span>
             </div>
             {g.entry.error_message && (
@@ -830,6 +833,7 @@ export function MentalModelDetailModal({
   initialTab = "content",
 }: MentalModelDetailModalProps) {
   const t = useTranslations("mentalModelDetailModal");
+  const locale = useLocale();
   const { currentBank } = useBank();
   // Same source the list uses: while the worker still has attempts left the model
   // is not paused yet, and the two surfaces must not disagree about that (#4532).
@@ -1186,7 +1190,7 @@ export function MentalModelDetailModal({
                         >
                           <RefreshCw className="w-3 h-3" />
                           {t("lastRefreshed", {
-                            time: formatRelativeTime(mentalModel.last_refreshed_at),
+                            time: formatRelativeTime(mentalModel.last_refreshed_at, locale),
                           })}
                         </span>
                       </div>
@@ -1346,6 +1350,7 @@ function Pill({ label, color }: { label: string; color?: string }) {
 
 function ConfigurationTab({ mentalModel }: { mentalModel: MentalModel }) {
   const t = useTranslations("mentalModelDetailModal");
+  const locale = useLocale();
   const trigger = mentalModel.trigger ?? { refresh_after_consolidation: false };
   const factTypes = trigger.fact_types ?? [];
   const tagGroups = trigger.tag_groups ?? [];
@@ -1401,7 +1406,7 @@ function ConfigurationTab({ mentalModel }: { mentalModel: MentalModel }) {
           label={t("labelLastRefreshed")}
           value={
             <span title={formatDateTime(mentalModel.last_refreshed_at)}>
-              {formatRelativeTime(mentalModel.last_refreshed_at)}
+              {formatRelativeTime(mentalModel.last_refreshed_at, locale)}
             </span>
           }
         />
@@ -1415,7 +1420,7 @@ function ConfigurationTab({ mentalModel }: { mentalModel: MentalModel }) {
             value={
               mentalModel.last_full_refreshed_at ? (
                 <span title={formatDateTime(mentalModel.last_full_refreshed_at)}>
-                  {formatRelativeTime(mentalModel.last_full_refreshed_at)}
+                  {formatRelativeTime(mentalModel.last_full_refreshed_at, locale)}
                 </span>
               ) : (
                 <span className="text-muted-foreground italic text-sm">{t("valueNever")}</span>

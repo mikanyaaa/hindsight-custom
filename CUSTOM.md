@@ -142,7 +142,7 @@ without copying the upstream renderer or adding new interaction capabilities.
 | `src/components/data-view.tsx`     | `brain-network-request-signature`, `brain-network-request-deps` | Reload on layout budget changes; normal signature stays identical.                                                 |
 | `src/components/data-view.tsx`     | `brain-network-view`                                            | Replace this call site only; pass custom mode controls.                                                            |
 
-No hooks in `src/messages/*.json`, `src/i18n/request.ts`, HomeView, Entities, auth or CSP.
+This step adds no hooks in `src/messages/*.json`, `src/i18n/request.ts`, HomeView, Entities, auth or CSP.
 `integration.tsx` contains the local controls/provider and `legend.tsx` the responsive data legend.
 Multi-group Euler views (`nodeGroupsFn`) fall back to upstream and hide the layout toggle.
 The local brain provider merges inherited messages and adds only its own namespace in
@@ -181,3 +181,32 @@ With Playwright available, run `node tests/custom/theme/layering-browser.cjs` fr
 
 The recursive registry accepts registered `brain-`, `theme-` and `frame-` namespaces, with
 unique paired markers and exact file matching.
+
+## Fail-closed auth, public health, and UI guards
+
+Custom behavior stays behind these markers. The access key is required unless
+`HINDSIGHT_CP_ALLOW_UNAUTHENTICATED=true`. Public paths match exactly or on a
+path segment. Polling pauses while the tab is hidden. Relative times use the
+app locale. Session expiry and request timeouts render in `src/custom/`.
+
+| File | Marker names | Purpose |
+| --- | --- | --- |
+| `src/middleware.ts` | `cp-auth-fail-closed` | Refuse protected routes when the access key is unset. |
+| `src/app/api/health/route.ts` | `public-health-cp` | Public liveness body; dataplane detail only for a session. |
+| `src/lib/api.ts` | `client-guard-fetch` | Detect an expired upstream session and a 20s data-fetch timeout. |
+| `src/app/[locale]/layout.tsx` | `client-guard-entry`, `client-guard-mount` | Mount the session and timeout states inside the locale provider. |
+| `src/lib/relative-time.ts` | `relative-time-locale` | Locale-aware relative time; invalid input renders a dash. |
+| `src/lib/use-refresh-attempts.ts` | `visible-poll-attempts` | Pause attempt polling while the tab is hidden. |
+| `src/components/documents-view.tsx` | `visible-poll-documents`, `relative-time-documents` | Visible-tab document refresh and locale timestamps. |
+| `src/components/knowledge-base-view.tsx` | `visible-poll-knowledge`, `relative-time-knowledge` | Visible-tab knowledge refresh and locale timestamps. |
+| `src/components/bank-operations-view.tsx` | `visible-poll-operations` | Visible-tab operations refresh. |
+| `src/components/bank-profile-view.tsx` | `visible-poll-profile` | Visible-tab profile refresh. |
+| `src/components/bank-stats-view.tsx` | `visible-poll-stats`, `visible-poll-timeseries`, `relative-time-stats` | Visible-tab stats refresh and locale timestamps. |
+| `src/components/cron-schedule-preview.tsx` | `relative-time-cron` | Pass the app locale into relative time. |
+| `src/components/freshness-line.tsx` | `relative-time-freshness` | Pass the app locale into relative time. |
+| `src/components/home-view.tsx` | `relative-time-home` | Pass the app locale into relative time. |
+| `src/components/next-refresh.tsx` | `relative-time-next` | Pass the app locale into relative time. |
+| `src/components/banks-overview.tsx` | `relative-time-banks` | Pass the app locale into relative time. |
+| `src/components/mental-models-view.tsx` | `relative-time-models` | Pass the app locale into relative time. |
+| `src/components/mental-model-detail-modal.tsx` | `relative-time-model-detail` | Pass the app locale into relative time. |
+| `src/components/bank-selector.tsx` | `relative-time-selector` | Pass the app locale into relative time. |

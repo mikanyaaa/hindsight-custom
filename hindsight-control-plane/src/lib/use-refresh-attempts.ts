@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { client } from "./api";
+// CUSTOM-HOOK: visible-poll-attempts begin
+import { useVisiblePoll } from "@/custom/perf/use-visible-poll";
+// CUSTOM-HOOK: visible-poll-attempts end
 
 /** A refresh attempt that has not finished: running now, or waiting out its retry gap. */
 export type RefreshAttempt = {
@@ -49,11 +52,12 @@ export function useRefreshAttempts(bankId: string | null, pollMs?: number) {
   }, [bankId]);
 
   useEffect(() => {
-    load();
-    if (!pollMs) return;
-    const id = setInterval(load, pollMs);
-    return () => clearInterval(id);
-  }, [load, pollMs]);
+    void load();
+  }, [load]);
+
+  useVisiblePoll(() => {
+    void load();
+  }, pollMs);
 
   return attempts;
 }

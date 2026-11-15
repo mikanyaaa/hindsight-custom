@@ -1,6 +1,6 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import cronstrue from "cronstrue";
 import { CronExpressionParser } from "cron-parser";
 import { formatRelativeTime } from "@/lib/relative-time";
@@ -20,6 +20,9 @@ export function CronSchedulePreview({
   compact?: boolean;
 }) {
   const t = useTranslations("cronPreview");
+  // CUSTOM-HOOK: relative-time-cron begin
+  const locale = useLocale();
+  // CUSTOM-HOOK: relative-time-cron end
   const expr = cron.trim();
   if (!expr) return null;
 
@@ -65,7 +68,7 @@ export function CronSchedulePreview({
       <p className="text-xs text-muted-foreground" title={`${t("upcoming")}\n${upcoming}`}>
         <span className="font-medium text-foreground">{human}</span>
         {" · "}
-        {t("nextRun")} {formatRelativeTime(next.toISOString())} ({fmtUtc(next)} {t("utc")})
+        {t("nextRun")} {formatRelativeTime(next.toISOString(), locale)} ({fmtUtc(next)} {t("utc")})
       </p>
     );
   }
@@ -75,7 +78,7 @@ export function CronSchedulePreview({
       <div className="font-medium text-foreground">{human}</div>
       <div className="text-muted-foreground">
         {t("nextRun")}:{" "}
-        <span className="text-foreground">{formatRelativeTime(next.toISOString())}</span>
+        <span className="text-foreground">{formatRelativeTime(next.toISOString(), locale)}</span>
         {" — "}
         {fmtUtc(next)} {t("utc")}
       </div>

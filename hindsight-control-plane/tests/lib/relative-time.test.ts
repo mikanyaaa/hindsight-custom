@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { formatWatermark } from "@/lib/relative-time";
+import { formatRelativeTime, formatWatermark } from "@/lib/relative-time";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -11,6 +11,23 @@ function at(now: string) {
   vi.useFakeTimers();
   vi.setSystemTime(new Date(now));
 }
+
+describe("formatRelativeTime", () => {
+  it("returns a dash for missing or invalid input", () => {
+    expect(formatRelativeTime("")).toBe("—");
+    expect(formatRelativeTime("not-a-date")).toBe("—");
+    expect(formatRelativeTime(null)).toBe("—");
+  });
+
+  it("uses the app locale, including German", () => {
+    at("2026-08-19T18:00:00Z");
+    const english = formatRelativeTime("2026-08-19T16:00:00Z", "en");
+    const german = formatRelativeTime("2026-08-19T16:00:00Z", "de");
+    expect(english.toLowerCase()).toContain("hour");
+    expect(german.toLowerCase()).toMatch(/stunde/);
+    expect(german).not.toContain("hour");
+  });
+});
 
 describe("formatWatermark", () => {
   it("shows only the clock time for today", () => {

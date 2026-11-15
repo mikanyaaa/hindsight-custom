@@ -2,7 +2,10 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+// CUSTOM-HOOK: visible-poll-knowledge begin
+import { useVisiblePoll } from "@/custom/perf/use-visible-poll";
+// CUSTOM-HOOK: visible-poll-knowledge end
 import { client, type KnowledgeNode, type KnowledgeTagFilter, type MentalModel } from "@/lib/api";
 import { useBank } from "@/lib/bank-context";
 import { Button } from "@/components/ui/button";
@@ -253,9 +256,9 @@ export function KnowledgeBaseView() {
 
   // Auto-refresh: silently re-poll the tree (freshness badges) and refresh every
   // open tab's content on the same tick.
-  useEffect(() => {
-    if (!currentBank) return;
-    const id = setInterval(() => {
+  useVisiblePoll(
+    () => {
+      if (!currentBank) return;
       loadTree({ silent: true });
       tabsRef.current.forEach((tb) =>
         client
@@ -263,9 +266,9 @@ export function KnowledgeBaseView() {
           .then((p) => setTabs((prev) => prev.map((x) => (x.id === p.id ? p : x))))
           .catch(() => {})
       );
-    }, AUTO_REFRESH_MS);
-    return () => clearInterval(id);
-  }, [currentBank, loadTree]);
+    },
+    currentBank ? AUTO_REFRESH_MS : null
+  );
 
   const allNodes = useMemo(() => flatten(roots), [roots]);
   // Where each hit lives, for the search result list — see buildPathIndex.
@@ -1050,6 +1053,9 @@ export function TreeRow({
   refreshAttempts?: Map<string, RefreshAttempt>;
   t: ReturnType<typeof useTranslations>;
 }) {
+  // CUSTOM-HOOK: relative-time-knowledge begin
+  const locale = useLocale();
+  // CUSTOM-HOOK: relative-time-knowledge end
   const isFolder = node.kind === "folder";
   const isOpen = expanded.has(node.id);
   const isActive = selectedId === node.id;
@@ -1118,7 +1124,7 @@ export function TreeRow({
               title={node.timestamp ? formatAbsoluteDateTime(node.timestamp) : undefined}
             >
               {node.timestamp
-                ? `${t("updatedLabel")} ${formatRelativeTime(node.timestamp)}`
+                ? `${t("updatedLabel")} ${formatRelativeTime(node.timestamp, locale)}`
                 : t("generating")}
             </div>
           )}
