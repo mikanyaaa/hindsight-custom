@@ -25,7 +25,7 @@ import tempfile
 import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Iterator, Mapping, Sequence
-from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
+from contextlib import AsyncExitStack, asynccontextmanager, contextmanager, suppress
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta, timezone
 from types import SimpleNamespace
@@ -41,7 +41,7 @@ from .._vector_index import (
     per_bank_index_min_submit_interval_seconds,
     per_bank_indexes_are_eager,
 )
-from ..cancellation import OperationCancelledError
+from ..cancellation import CancellationToken, OperationCancelledError
 from ..config import (
     DEFAULT_MENTAL_MODEL_MIN_REFRESH_INTERVAL_SECONDS,
     DEFAULT_RECALL_CHUNKS_MAX_TOKENS,
@@ -146,7 +146,8 @@ from .operation_metadata import (
     RefreshMentalModelOutcomeMetadata,
     RetainExtractionErrors,
     RetainOutcomeAggregate,
-    RetainOutcomeMetadata,
+    reflect_result_payload,
+    retain_outcome_from_unit_ids,
 )
 from .sql import SQLDialect, create_sql_dialect
 from .sql.postgresql import knowledge_bm25_arm
@@ -2307,6 +2308,10 @@ def _operation_details(operation_type: str, result_metadata: dict[str, Any]) -> 
     MCP tool, which ``json.dumps`` the whole result, so everything in it has to be
     JSON-able primitives.
     """
+    # reflect stores its answer at result_metadata["result"]. The type itself is
+    # the operation_type column, which list/get already project as operation_type
+    # and task_type. There is no separate details object: the HTTP details field
+    # is the mental-model outcome only, and a second shape would fail that model.
     if operation_type != "refresh_mental_model":
         return None
     outcome = result_metadata.get("outcome")
@@ -2820,6 +2825,95 @@ def _assemble_graph_data(
         )
 
     return {"nodes": nodes, "edges": edges, "table_rows": table_rows, "total_units": total_count, "limit": limit}
+
+
+# How often a running reflect checks whether its operation row was cancelled.
+_REFLECT_CANCEL_POLL_SECONDS = 2.0
+
+# Keys forwarded from a queued reflect payload into reflect_async. Worker-only
+# passengers (_tenant_id, operation_id, the trace parent) stay off this list.
+_REFLECT_TASK_KEYS = (
+    "query",
+    "budget",
+    "context",
+    "max_tokens",
+    "response_schema",
+    "tags",
+    "tags_match",
+    "tag_groups",
+    "apply_all_directives",
+    "exclude_mental_model_ids",
+    "fact_types",
+    "exclude_mental_models",
+    "recall_include_chunks",
+    "recall_max_tokens_override",
+    "recall_chunks_max_tokens_override",
+    "reflect_search_observations_max_tokens_override",
+    "reflect_search_observations_include_entities_override",
+    "reflect_search_mental_models_max_tokens_override",
+    "created_after",
+    "created_before",
+    "answer_as_document",
+)
+
+
+@dataclass
+class PreparedReflectCall:
+    """Arguments for reflect_async plus the flags that shape the stored answer."""
+
+    kwargs: dict[str, Any]
+    include_based_on: bool
+    include_trace: bool
+
+
+def _reflect_task_payload(reflect_kwargs: Mapping[str, Any]) -> dict[str, Any]:
+    """JSON-safe task payload. The request context never rides along."""
+    payload: dict[str, Any] = {}
+    for key, value in reflect_kwargs.items():
+        if key in ("request_context", "bank_id"):
+            continue
+        payload[key] = value.value if isinstance(value, Budget) else value
+    return payload
+
+
+def _coerce_reflect_datetime(value: Any) -> Any:
+    """Turn a JSON window bound back into an aware datetime. Leave anything else as it is."""
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return value
+    else:
+        return value
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _prepare_reflect_call(source: Mapping[str, Any]) -> PreparedReflectCall:
+    """Pick the reflect arguments out of a task payload and coerce budget back to an enum."""
+    kwargs: dict[str, Any] = {}
+    for key in _REFLECT_TASK_KEYS:
+        if key in source and source[key] is not None:
+            kwargs[key] = source[key]
+    budget = kwargs.get("budget")
+    if isinstance(budget, str):
+        try:
+            kwargs["budget"] = Budget(budget)
+        except ValueError:
+            kwargs["budget"] = Budget.LOW
+    # The task row is JSON, so a window bound comes back as an ISO string.
+    # reflect_async compares these as datetimes.
+    for key in ("created_after", "created_before"):
+        if key in kwargs:
+            kwargs[key] = _coerce_reflect_datetime(kwargs[key])
+    return PreparedReflectCall(
+        kwargs=kwargs,
+        include_based_on=bool(source.get("include_based_on", False)),
+        include_trace=bool(source.get("include_trace", False)),
+    )
 
 
 class MemoryEngine(MemoryEngineInterface):
@@ -4382,6 +4476,107 @@ class MemoryEngine(MemoryEngineInterface):
                 purged += 1
         return purged
 
+    def _raise_if_reflect_llm_unavailable(self) -> None:
+        """Refuse a reflect that cannot call an LLM, before any work is queued or run."""
+        if self._reflect_llm_config is None:
+            raise ValueError("Memory LLM API key not set. Set HINDSIGHT_API_LLM_API_KEY environment variable.")
+        if self._reflect_llm_config.provider == "none":
+            from .providers.none_llm import LLMNotAvailableError
+
+            raise LLMNotAvailableError(
+                "Reflect requires an LLM provider. Current provider is set to 'none'. "
+                "Set HINDSIGHT_API_LLM_PROVIDER to a real provider (e.g., openai, anthropic, gemini)."
+            )
+
+    async def _watch_reflect_cancel(self, operation_id: str, token: CancellationToken) -> None:
+        """Cancel the in-flight reflect once its operation row is no longer alive."""
+        try:
+            while not token.cancelled:
+                if not await self._check_op_alive(operation_id):
+                    token.cancel("operation cancelled")
+                    return
+                await asyncio.sleep(_REFLECT_CANCEL_POLL_SECONDS)
+        except asyncio.CancelledError:
+            return
+
+    async def _handle_reflect(self, task_dict: dict[str, Any]) -> None:
+        """Run a queued reflect and store the public answer on the operation.
+
+        The MCP tool waits only a few seconds. This handler is what finishes the
+        work after that wait has already returned pending, and what a later
+        ``get_reflect_result`` reads back. Cancellation is cooperative: the
+        watcher flips the request token when the row is cancelled, and the agent
+        loop stops at its next checkpoint.
+        """
+        from hindsight_api.models import RequestContext
+
+        bank_id = task_dict.get("bank_id")
+        if not isinstance(bank_id, str) or not bank_id:
+            raise ValueError("bank_id is required for reflect task")
+        operation_id = task_dict.get("_operation_id") or task_dict.get("operation_id")
+        prepared = _prepare_reflect_call(task_dict)
+        token = CancellationToken()
+        retry_count = task_dict.get("_retry_count", 0)
+        tenant_id = task_dict.get("_tenant_id")
+        api_key_id = task_dict.get("_api_key_id")
+        context = RequestContext(
+            internal=True,
+            user_initiated=True,
+            tenant_id=tenant_id if isinstance(tenant_id, str) else None,
+            api_key_id=api_key_id if isinstance(api_key_id, str) else None,
+            retry_count=retry_count if isinstance(retry_count, int) else 0,
+            operation_id=str(operation_id) if operation_id else None,
+            cancellation=token,
+        )
+        watcher: asyncio.Task[None] | None = None
+        if operation_id:
+            watcher = asyncio.create_task(self._watch_reflect_cancel(str(operation_id), token))
+        try:
+            result = await self.reflect_async(bank_id=bank_id, request_context=context, **prepared.kwargs)
+            if operation_id and not await self._check_op_alive(str(operation_id)):
+                logger.info(f"Reflect {operation_id} finished after it was cancelled; not storing a result")
+                return
+            payload = reflect_result_payload(
+                result.model_dump(mode="json"),
+                include_based_on=prepared.include_based_on,
+                include_trace=prepared.include_trace,
+            )
+            await self._write_reflect_result(str(operation_id) if operation_id else None, bank_id, payload)
+        except OperationCancelledError:
+            if operation_id and not await self._check_op_alive(str(operation_id)):
+                logger.info(f"Reflect {operation_id} cancelled")
+                return
+            raise
+        finally:
+            if watcher is not None:
+                watcher.cancel()
+                with suppress(asyncio.CancelledError):
+                    await watcher
+
+    async def _write_reflect_result(self, operation_id: str | None, bank_id: str, payload: dict[str, Any]) -> None:
+        """Merge the public reflect body into result_metadata under ``result``.
+
+        A sibling ``progress`` key, if one is ever written, survives the merge.
+        A row that is already cancelled is left alone so a late write cannot
+        resurrect an answer the caller stopped.
+        """
+        if not operation_id:
+            return
+        backend = await self._get_backend()
+        async with acquire_with_retry(backend) as conn:
+            await conn.execute(
+                f"""
+                UPDATE {fq_table("async_operations")}
+                SET result_metadata = COALESCE(result_metadata, '{{}}'::jsonb) || $2::jsonb,
+                    updated_at = now()
+                WHERE operation_id = $1 AND bank_id = $3
+                  AND status <> 'cancelled'
+                """,
+                uuid.UUID(operation_id),
+                json.dumps({"result": payload}, default=_json_default),
+                bank_id,
+            )
+
     async def _handle_batch_retain(self, task_dict: dict[str, Any]):
         """
         Handler for batch retain tasks.
@@ -5094,6 +5289,8 @@ class MemoryEngine(MemoryEngineInterface):
                     await self._handle_vector_index_maintenance(task_dict)
                 elif task_type == "refresh_mental_model":
                     await self._handle_refresh_mental_model(task_dict)
+                elif task_type == "reflect":
+                    await self._handle_reflect(task_dict)
                 elif task_type == "webhook_delivery":
                     await self._handle_webhook_delivery(task_dict)
                 else:
@@ -5727,7 +5924,6 @@ class MemoryEngine(MemoryEngineInterface):
         if not operation_id:
             return
 
-        unit_ids_count = sum(len(group) for group in unit_ids)
         try:
             backend = await self._get_backend()
             async with acquire_with_retry(backend) as conn:
@@ -5741,11 +5937,7 @@ class MemoryEngine(MemoryEngineInterface):
                 metadata = conn.parse_json(row["result_metadata"]) or {}
                 extraction_errors = RetainExtractionErrors()
                 extraction_errors.merge_metadata(metadata)
-                outcome = RetainOutcomeMetadata(
-                    unit_ids_count=unit_ids_count,
-                    extraction_errors_count=extraction_errors.count,
-                    extraction_errors_sample=extraction_errors.sample,
-                )
+                outcome = retain_outcome_from_unit_ids(unit_ids, extraction_errors)
 
                 await conn.execute(
                     f"""
@@ -15938,18 +16130,7 @@ class MemoryEngine(MemoryEngineInterface):
         if not query.strip() and not (context or "").strip():
             raise ValueError("Reflect requires a non-empty query.")
 
-        # Use cached LLM config
-        if self._reflect_llm_config is None:
-            raise ValueError("Memory LLM API key not set. Set HINDSIGHT_API_LLM_API_KEY environment variable.")
-
-        # Block reflect when the reflect LLM provider is "none"
-        if self._reflect_llm_config.provider == "none":
-            from .providers.none_llm import LLMNotAvailableError
-
-            raise LLMNotAvailableError(
-                "Reflect requires an LLM provider. Current provider is set to 'none'. "
-                "Set HINDSIGHT_API_LLM_PROVIDER to a real provider (e.g., openai, anthropic, gemini)."
-            )
+        self._raise_if_reflect_llm_unavailable()
 
         # Authenticate tenant and set schema in context (for fq_table())
         await self._authenticate_tenant(request_context)
@@ -24099,6 +24280,59 @@ class MemoryEngine(MemoryEngineInterface):
             # Never fail a completed reconcile over the hand-off; the next write
             # picks it up. Logged loudly so a persistent failure is visible.
             logger.exception(f"Vector index maintenance follow-up submit failed for bank {bank_id}")
+
+    async def submit_async_reflect(
+        self,
+        bank_id: str,
+        reflect_kwargs: dict[str, Any],
+        request_context: "RequestContext",
+    ) -> dict[str, Any]:
+        """Queue a reflect and return its operation id.
+
+        The worker runs ``reflect_async`` and stores the public answer on the
+        operation. Callers that can wait a few seconds (the MCP tool) poll
+        ``get_operation_status``; the work itself is not bounded by that wait.
+
+        A synchronous task backend runs the reflect inside this call, the same
+        way it runs every other queued operation. The API process uses the
+        broker, so this returns as soon as the row is inserted.
+
+        Reflects are not deduped: each query is its own piece of work.
+        """
+        await self._authenticate_tenant(request_context)
+        query = sanitize_text(reflect_kwargs.get("query")) or ""
+        context = sanitize_text(reflect_kwargs.get("context"))
+        if not query.strip() and not (context or "").strip():
+            raise ValueError("Reflect requires a non-empty query.")
+        self._raise_if_reflect_llm_unavailable()
+        if self._operation_validator:
+            await self._validate_operation(
+                self._operation_validator.validate_reflect(
+                    ReflectContext(
+                        bank_id=bank_id,
+                        query=query,
+                        request_context=request_context,
+                        budget=reflect_kwargs.get("budget"),
+                        context=context,
+                    )
+                )
+            )
+        # The operations row has a bank foreign key. reflect_async creates the
+        # profile later; the row has to exist before the insert.
+        await self._ensure_bank_exists(bank_id, request_context)
+
+        task_payload = _reflect_task_payload({**reflect_kwargs, "query": query, "context": context})
+        if request_context.tenant_id:
+            task_payload["_tenant_id"] = request_context.tenant_id
+        if request_context.api_key_id:
+            task_payload["_api_key_id"] = request_context.api_key_id
+        inject_task_trace_context(task_payload)
+        return await self._submit_async_operation(
+            bank_id=bank_id,
+            operation_type="reflect",
+            task_type="reflect",
+            task_payload=task_payload,
+        )
 
     async def submit_async_refresh_mental_model(
         self,

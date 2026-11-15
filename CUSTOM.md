@@ -254,3 +254,11 @@ app locale. Session expiry and request timeouts render in `src/custom/`.
 | `src/components/mental-models-view.tsx` | `relative-time-models` | Pass the app locale into relative time. |
 | `src/components/mental-model-detail-modal.tsx` | `relative-time-model-detail` | Pass the app locale into relative time. |
 | `src/components/bank-selector.tsx` | `relative-time-selector` | Pass the app locale into relative time. |
+
+## Async MCP reflect
+
+MCP `reflect` and `sync_retain` queue the work and wait up to `wait_seconds` (default 20, clamped to 0–25). A reflect that finishes in time returns the same body as before. One that is still running returns `status: pending` and an `operation_id` for `get_reflect_result`. `sync_retain` uses the existing retain operation; a pending result is polled with `get_operation`. Both tools run only after the same origin authentication as the other MCP tools, and the operation lookup stays on the bank that request authorized.
+
+Reflect operations use `operation_type=reflect`. One worker slot is reserved for them (`HINDSIGHT_API_WORKER_REFLECT_RESERVED_SLOTS`, default 1) so consolidation and mental-model refresh cannot take every slot. No database migration.
+
+`CUSTOM-HOOK async-mcp-reflect` marks the reservation default in `hindsight-api-slim/hindsight_api/config.py`. The behavior lives in `engine/memory_engine.py`, `engine/operation_metadata.py`, `mcp_tools.py`, and `api/mcp.py`.

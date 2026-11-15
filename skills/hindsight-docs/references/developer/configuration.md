@@ -2631,7 +2631,7 @@ Configuration for background task processing. By default, the API processes task
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `HINDSIGHT_API_WORKER_ENABLED` | Enable the internal worker in the API process. Set to `false` to stop this process claiming and running queued background operations (consolidation, retain, mental model refresh) — this, not the maintenance interval knobs, is what quiesces execution. | `true` |
+| `HINDSIGHT_API_WORKER_ENABLED` | Enable the internal worker in the API process. Set to `false` to stop this process claiming and running queued background operations (consolidation, retain, reflect, mental model refresh) — this, not the maintenance interval knobs, is what quiesces execution. | `true` |
 | `HINDSIGHT_API_WORKER_ID` | Unique worker identifier | hostname |
 | `HINDSIGHT_API_WORKER_POLL_INTERVAL_MS` | Database polling interval in milliseconds | `500` |
 | `HINDSIGHT_API_WORKER_MAX_RETRIES` | Max retries before marking task failed | `3` |
@@ -2643,6 +2643,7 @@ Configuration for background task processing. By default, the API processes task
 | `HINDSIGHT_API_OPERATION_CLEANUP_BATCH_SIZE` | Maximum expired terminal operation rows deleted per tenant schema during each cleanup cycle. Together with the cleanup interval this sets the drain rate for a backlog. Must be a positive integer. | `1000` |
 | `HINDSIGHT_API_OPERATION_CLEANUP_INTERVAL_SECONDS` | How often the cleanup cycle runs. Each cycle costs one cross-tenant discovery round-trip, so the interval is the main lever on that cost for deployments with many tenants (see [Background Maintenance](#background-maintenance)). `0` disables the job. | `900` |
 | `HINDSIGHT_API_WORKER_CONSOLIDATION_RESERVED_SLOTS` | Reserved (minimum) slots for consolidation within `WORKER_MAX_SLOTS` — a floor that guarantees capacity, **not** a per-type cap (bank-serialization preserved). See the note below. | `2` |
+| `HINDSIGHT_API_WORKER_REFLECT_RESERVED_SLOTS` | Reserved (minimum) slots for reflect within `WORKER_MAX_SLOTS`. Keeps an interactive reflect from waiting behind consolidation and mental-model refresh. | `1` |
 | `HINDSIGHT_API_WORKER_CONSOLIDATION_BANK_PRIORITY` | Per-bank priority for consolidation scheduling (see note below) | _(unset)_ |
 | `HINDSIGHT_API_WORKER_RETAIN_RESERVED_SLOTS` | Reserved (minimum) slots for retain within `WORKER_MAX_SLOTS`. | `0` |
 | `HINDSIGHT_API_WORKER_FILE_CONVERT_RETAIN_RESERVED_SLOTS` | Reserved (minimum) slots for file_convert_retain within `WORKER_MAX_SLOTS`. | `0` |
@@ -2661,7 +2662,7 @@ Terminal operations use one coherent retention window for the entire row. Hindsi
 
 Example: `MAX_SLOTS=10`, `CONSOLIDATION_RESERVED_SLOTS=2`, `RETAIN_RESERVED_SLOTS=3`, `REFRESH_MENTAL_MODEL_RESERVED_SLOTS=2` → shared pool = `10 - (2+3+2) = 3`.
 
-With the defaults (`MAX_SLOTS=10`, `CONSOLIDATION_RESERVED_SLOTS=2`, all other reservations `0`), 2 slots are always reserved for consolidation and the remaining 8 form the shared pool; consolidation may still overflow the shared pool up to 10. Set `CONSOLIDATION_RESERVED_SLOTS=0` to release its reserved capacity into the shared pool. Consolidation's bank-serialization constraint (no two consolidation tasks for the same bank concurrently) is preserved regardless of which pool claims the slot.
+With the defaults (`MAX_SLOTS=10`, `CONSOLIDATION_RESERVED_SLOTS=2`, `REFLECT_RESERVED_SLOTS=1`, every other reservation `0`), 3 slots are reserved and the remaining 7 form the shared pool. Consolidation and reflect may still overflow into that shared pool, up to 10. Set a reservation to `0` to release it into the shared pool. The sum of reservations must stay within `MAX_SLOTS` or startup raises `ValueError`. Consolidation's bank-serialization constraint (no two consolidation tasks for the same bank concurrently) is preserved regardless of which pool claims the slot.
 
 The legacy `..._MAX_SLOTS` env vars are a deprecated alias for `..._RESERVED_SLOTS` — despite the name they set the reservation floor, never a ceiling. They still work but log a warning; migrate to `..._RESERVED_SLOTS`.
 > **📝 Consolidation bank priority**

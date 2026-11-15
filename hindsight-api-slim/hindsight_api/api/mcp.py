@@ -21,7 +21,7 @@ from hindsight_api.config import (
 )
 from hindsight_api.extensions import MCPExtension, load_extension
 from hindsight_api.extensions.tenant import AuthenticationError
-from hindsight_api.mcp_tools import _ALL_TOOLS, MCPToolsConfig, register_mcp_tools
+from hindsight_api.mcp_tools import _ALL_TOOLS, MCPToolsConfig, expand_mcp_tool_allowlist, register_mcp_tools
 from hindsight_api.models import RequestContext
 from hindsight_api.schema_context import _current_schema
 
@@ -159,6 +159,7 @@ def create_mcp_server(memory: MemoryEngine, multi_bank: bool = True) -> FastMCP:
             "sync_retain",
             "recall",
             "reflect",
+            "get_reflect_result",
             "list_mental_models",
             "get_mental_model",
             "create_mental_model",
@@ -197,7 +198,7 @@ def create_mcp_server(memory: MemoryEngine, multi_bank: bool = True) -> FastMCP:
 
     # Apply global mcp_enabled_tools filter (env-level allowlist)
     if global_config.mcp_enabled_tools is not None:
-        allowed = frozenset(global_config.mcp_enabled_tools)
+        allowed = frozenset(expand_mcp_tool_allowlist(global_config.mcp_enabled_tools))
         base_tools = (base_tools if base_tools is not None else _ALL_TOOLS) & allowed
 
     retain_description, recall_description = _build_mcp_tool_descriptions(

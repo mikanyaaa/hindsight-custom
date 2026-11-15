@@ -5,10 +5,11 @@ This module provides the core tool logic used by both:
 - api/mcp.py (HTTP transport for API server)
 """
 
+import asyncio
 import json
 import logging
 import time
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Iterable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Annotated, Any, Callable, Literal, get_args
@@ -54,6 +55,7 @@ _ALL_TOOLS: frozenset[str] = frozenset(
         "sync_retain",
         "recall",
         "reflect",
+        "get_reflect_result",
         "list_banks",
         "create_bank",
         "list_mental_models",
@@ -93,6 +95,198 @@ _ALL_TOOLS: frozenset[str] = frozenset(
 )
 
 logger = logging.getLogger(__name__)
+
+# An MCP client often gives up at about 30s. The tool waits less than that and,
+# if the work is still running, hands back an operation id the caller can poll.
+# Values outside 0..25 are clamped, not rejected, so an old caller that passes
+# a larger number still gets a short wait instead of an error.
+_MCP_WAIT_MAX_SECONDS = 25
+_MCP_WAIT_DEFAULT_SECONDS = 20
+_MCP_WAIT_POLL_SECONDS = 0.5
+_MCP_PROGRESS_EVERY_SECONDS = 10.0
+_REFLECT_PENDING_HINT = "call get_reflect_result with this operation_id"
+_RETAIN_PENDING_HINT = "call get_operation with this operation_id"
+_TERMINAL_OPERATION_STATUSES = frozenset({"completed", "failed", "cancelled", "not_found"})
+
+
+def clamp_wait_seconds(wait_seconds: int) -> int:
+    """Clamp an MCP wait to 0..25. Out of range waits less; it is not an error."""
+    try:
+        seconds = int(wait_seconds)
+    except (TypeError, ValueError):
+        return _MCP_WAIT_DEFAULT_SECONDS
+    if seconds < 0:
+        return 0
+    if seconds > _MCP_WAIT_MAX_SECONDS:
+        return _MCP_WAIT_MAX_SECONDS
+    return seconds
+
+
+def expand_mcp_tool_allowlist(tools: Iterable[str]) -> set[str]:
+    """A caller allowed to reflect can poll the answer that came back pending.
+
+    ``get_reflect_result`` only reads that one operation. Leaving it off an
+    allowlist that already includes ``reflect`` would strand every slow reflect.
+    """
+    enabled = set(tools)
+    if "reflect" in enabled:
+        enabled.add("get_reflect_result")
+    return enabled
+
+
+@dataclass
+class _OperationWait:
+    """One poll of an async operation, and whether the wait gave up first."""
+
+    status: dict[str, Any]
+    pending: bool
+
+
+def _current_mcp_context() -> Any | None:
+    """The FastMCP request context, when this call is inside a tool request."""
+    try:
+        from fastmcp.server.dependencies import get_context
+    except ImportError:
+        return None
+    try:
+        return get_context()
+    except (RuntimeError, LookupError, ValueError):
+        return None
+
+
+def _mcp_progress_token(ctx: Any) -> Any:
+    """The client's progress token, or None when it did not ask for progress."""
+    if ctx is None:
+        return None
+    request_context = getattr(ctx, "request_context", None)
+    meta = getattr(request_context, "meta", None) if request_context is not None else None
+    if meta is None:
+        return None
+    if isinstance(meta, dict):
+        return meta.get("progressToken")
+    return getattr(meta, "progressToken", None)
+
+
+async def _report_mcp_progress(ctx: Any, *, progress: float, total: float, message: str) -> None:
+    """Best-effort progress. A client that cannot display it must not fail the wait."""
+    report = getattr(ctx, "report_progress", None)
+    if report is None:
+        return
+    try:
+        try:
+            result = report(progress=progress, total=total, message=message)
+        except TypeError:
+            result = report(progress, total)
+        if asyncio.iscoroutine(result):
+            await result
+    except Exception:
+        logger.debug("MCP progress report failed", exc_info=True)
+
+
+async def _wait_for_operation(
+    memory: MemoryEngine,
+    *,
+    bank_id: str,
+    operation_id: str,
+    request_context: RequestContext,
+    wait_seconds: int,
+    progress_message: str,
+) -> _OperationWait:
+    """Poll an operation until it finishes or ``wait_seconds`` elapses.
+
+    ``wait_seconds`` of 0 still checks once: a synchronous task backend may have
+    finished the work during submit. Progress is reported about every 10 seconds,
+    and only when the client sent a progress token.
+    """
+    wait_seconds = clamp_wait_seconds(wait_seconds)
+    started = time.monotonic()
+    deadline = started + wait_seconds
+    next_progress_at = started + _MCP_PROGRESS_EVERY_SECONDS
+    ctx = _current_mcp_context()
+    token = _mcp_progress_token(ctx)
+    while True:
+        status = await memory.get_operation_status(
+            bank_id,
+            operation_id,
+            request_context=request_context,
+        )
+        now = time.monotonic()
+        if status.get("status") in _TERMINAL_OPERATION_STATUSES:
+            return _OperationWait(status=status, pending=False)
+        if token is not None and wait_seconds > 0 and now >= next_progress_at:
+            elapsed = min(float(wait_seconds), max(0.0, now - started))
+            await _report_mcp_progress(ctx, progress=elapsed, total=float(wait_seconds), message=progress_message)
+            next_progress_at = now + _MCP_PROGRESS_EVERY_SECONDS
+        if now >= deadline:
+            return _OperationWait(status=status, pending=True)
+        remaining = deadline - time.monotonic()
+        await asyncio.sleep(min(_MCP_WAIT_POLL_SECONDS, max(0.0, remaining)))
+
+
+def _reflect_error(message: str, operation_id: str) -> dict[str, Any]:
+    """An error a reflect caller can read the old way (``error`` and ``text``) or the new way."""
+    return {
+        "status": "error",
+        "error": message,
+        "message": message,
+        "text": "",
+        "operation_id": operation_id,
+    }
+
+
+def _reflect_body(waited: _OperationWait, operation_id: str) -> dict[str, Any]:
+    """The reflect tool's response for one waited operation.
+
+    A finished reflect is the stored answer itself, with no status wrapper, so
+    a caller that already reads ``text`` keeps working. Anything else is pending
+    or an error.
+    """
+    status = waited.status
+    state = status.get("status")
+    if state == "not_found":
+        return _reflect_error("Operation not found for this bank", operation_id)
+    if status.get("operation_type") != "reflect":
+        return _reflect_error("Operation is not a reflect", operation_id)
+    if state == "completed":
+        result = (status.get("result_metadata") or {}).get("result")
+        if not isinstance(result, dict):
+            return _reflect_error("Reflect finished without a result", operation_id)
+        return dict(result)
+    if state == "cancelled":
+        return _reflect_error(status.get("error_message") or "Reflect was cancelled", operation_id)
+    if state == "failed":
+        return _reflect_error(status.get("error_message") or "Reflect failed", operation_id)
+    return {"status": "pending", "operation_id": operation_id, "hint": _REFLECT_PENDING_HINT}
+
+
+def _retain_body(waited: _OperationWait, operation_id: str) -> dict[str, Any]:
+    """sync_retain's response. A finished retain keeps today's completed shape and adds the operation id."""
+    status = waited.status
+    state = status.get("status")
+    if state == "not_found":
+        return {
+            "status": "error",
+            "message": "Operation not found for this bank",
+            "operation_id": operation_id,
+        }
+    if waited.pending or state in ("pending", "processing"):
+        return {"status": "pending", "operation_id": operation_id, "hint": _RETAIN_PENDING_HINT}
+    if state == "completed":
+        metadata = status.get("result_metadata") or {}
+        body: dict[str, Any] = {
+            "status": "completed",
+            "message": "Memory stored successfully",
+            "memory_ids": list(metadata.get("memory_ids") or []),
+            "operation_id": operation_id,
+        }
+        if metadata.get("memory_ids_truncated"):
+            body["memory_ids_truncated"] = True
+        return body
+    if state == "cancelled":
+        message = status.get("error_message") or "Retain was cancelled"
+    else:
+        message = status.get("error_message") or "Retain failed"
+    return {"status": "error", "message": message, "operation_id": operation_id}
 
 
 class MentalModelTriggerInput(BaseModel):
@@ -580,6 +774,7 @@ def build_content_dict(
 _READ_ONLY_TOOLS = {
     "recall",
     "reflect",
+    "get_reflect_result",
     "list_banks",
     "get_bank",
     "get_bank_stats",
@@ -645,6 +840,7 @@ def register_mcp_tools(
         "sync_retain",
         "recall",
         "reflect",
+        "get_reflect_result",
         "list_banks",
         "create_bank",
         "list_mental_models",
@@ -693,6 +889,11 @@ def register_mcp_tools(
 
     if "reflect" in tools_to_register:
         _register_reflect(mcp, memory, config)
+
+    # The poll is part of reflect. Register it whenever reflect is, even if an
+    # older allowlist named only "reflect".
+    if "get_reflect_result" in tools_to_register or "reflect" in tools_to_register:
+        _register_get_reflect_result(mcp, memory, config)
 
     if "list_banks" in tools_to_register:
         _register_list_banks(mcp, memory, config)
@@ -836,7 +1037,7 @@ def _apply_bank_tool_filtering(mcp: FastMCP, memory: MemoryEngine, config: MCPTo
                 filtered = await validator.filter_mcp_tools(bank_id, request_context, candidate)
             except Exception:
                 logger.warning("filter_mcp_tools raised, returning unfiltered tools", exc_info=True)
-                return enabled
+                return expand_mcp_tool_allowlist(enabled) if enabled is not None else None
             if filtered != candidate:
                 # Validator can only narrow, never expand beyond the bank config ceiling.
                 if bank_tools is not None:
@@ -844,6 +1045,8 @@ def _apply_bank_tool_filtering(mcp: FastMCP, memory: MemoryEngine, config: MCPTo
                 else:
                     enabled = set(filtered)
 
+        if enabled is not None:
+            enabled = expand_mcp_tool_allowlist(enabled)
         return enabled
 
     if hasattr(mcp, "list_tools"):
@@ -910,6 +1113,7 @@ _UNAUDITED_MCP_TOOLS: frozenset[str] = frozenset(
         "get_memory",
         "get_mental_model",
         "get_operation",
+        "get_reflect_result",
         "list_banks",
         "list_directives",
         "list_documents",
@@ -1106,8 +1310,51 @@ def _register_retain(mcp: FastMCP, memory: MemoryEngine, config: MCPToolsConfig)
                 return {"status": "error", "message": str(e)}
 
 
+async def _sync_retain_operation(
+    memory: MemoryEngine,
+    config: MCPToolsConfig,
+    *,
+    target_bank: str,
+    content_dict: dict[str, Any],
+    wait_seconds: int,
+) -> dict[str, Any]:
+    """Queue the existing retain operation and wait up to ``wait_seconds`` for it.
+
+    The operation id is the parent retain's. ``get_operation`` reads that row;
+    this does not invent a second operation type.
+    """
+    request_context = _get_request_context(config)
+    try:
+        submitted = await memory.submit_async_retain(
+            bank_id=target_bank,
+            contents=[content_dict],
+            request_context=request_context,
+            # `get`, not `pop`: the list above holds this same dict, so popping would
+            # strip `strategy` off the item before the call runs and retain_params
+            # would not capture it — a later reprocess then re-extracts under the
+            # bank's default strategy.
+            strategy=content_dict.get("strategy"),
+        )
+        operation_id = str(submitted["operation_id"])
+        waited = await _wait_for_operation(
+            memory,
+            bank_id=target_bank,
+            operation_id=operation_id,
+            request_context=request_context,
+            wait_seconds=wait_seconds,
+            progress_message="retain still running",
+        )
+        return _retain_body(waited, operation_id)
+    except OperationValidationError as e:
+        logger.warning(f"Sync retain rejected: {e}")
+        return {"status": "error", "message": str(e)}
+    except Exception as e:
+        logger.error(f"Error in sync retain: {e}", exc_info=True)
+        return {"status": "error", "message": str(e)}
+
+
 def _register_sync_retain(mcp: FastMCP, memory: MemoryEngine, config: MCPToolsConfig) -> None:
-    """Register the sync_retain tool (synchronous retain that waits for completion)."""
+    """Register the sync_retain tool (retain that waits, then returns pending)."""
 
     if config.include_bank_id_param:
 
@@ -1121,11 +1368,15 @@ def _register_sync_retain(mcp: FastMCP, memory: MemoryEngine, config: MCPToolsCo
             document_id: str | None = None,
             bank_id: str | None = None,
             strategy: str | None = None,
+            wait_seconds: int = 20,
         ) -> dict:
             """Store information to long-term memory and wait for completion.
 
-            Unlike retain (which is asynchronous), this tool blocks until the memory
-            is fully stored and immediately available for recall.
+            Unlike retain (which returns as soon as the work is queued), this tool waits
+            up to wait_seconds for the retain to finish. When it finishes in time the
+            memory is available for recall. When it is still running, the response is
+            pending and carries an operation_id for get_operation. get_operation has to
+            be enabled to poll that id.
 
             Args:
                 content: The fact/memory to store (be specific and include relevant details)
@@ -1136,6 +1387,7 @@ def _register_sync_retain(mcp: FastMCP, memory: MemoryEngine, config: MCPToolsCo
                 document_id: Optional document ID to associate this memory with
                 bank_id: Optional bank to store in (defaults to session bank). Use for cross-bank operations.
                 strategy: Optional named retain strategy (e.g., 'exact' for verbatim storage). Strategies are defined in the bank config.
+                wait_seconds: Seconds to wait before returning pending. Clamped to 0..25. Default: 20.
             """
             target_bank = await _resolve_bank(config, bank_id)
             if target_bank is None:
@@ -1145,31 +1397,13 @@ def _register_sync_retain(mcp: FastMCP, memory: MemoryEngine, config: MCPToolsCo
             if error:
                 return {"status": "error", "message": error}
 
-            request_context = _get_request_context(config)
-
-            try:
-                result = await memory.retain_batch_async(
-                    bank_id=target_bank,
-                    contents=[content_dict],
-                    request_context=request_context,
-                    # `get`, not `pop`: the list above holds this same dict, so popping would
-                    # strip `strategy` off the item before the call runs and retain_params
-                    # would not capture it — a later reprocess then re-extracts under the
-                    # bank's default strategy.
-                    strategy=content_dict.get("strategy"),
-                )
-                memory_ids = [uid for batch in result for uid in batch]
-                return {
-                    "status": "completed",
-                    "message": "Memory stored successfully",
-                    "memory_ids": memory_ids,
-                }
-            except OperationValidationError as e:
-                logger.warning(f"Sync retain rejected: {e}")
-                return {"status": "error", "message": str(e)}
-            except Exception as e:
-                logger.error(f"Error in sync retain: {e}", exc_info=True)
-                return {"status": "error", "message": str(e)}
+            return await _sync_retain_operation(
+                memory,
+                config,
+                target_bank=target_bank,
+                content_dict=content_dict,
+                wait_seconds=wait_seconds,
+            )
 
     else:
 
@@ -1182,11 +1416,15 @@ def _register_sync_retain(mcp: FastMCP, memory: MemoryEngine, config: MCPToolsCo
             metadata: dict[str, str] | None = None,
             document_id: str | None = None,
             strategy: str | None = None,
+            wait_seconds: int = 20,
         ) -> dict:
             """Store information to long-term memory and wait for completion.
 
-            Unlike retain (which is asynchronous), this tool blocks until the memory
-            is fully stored and immediately available for recall.
+            Unlike retain (which returns as soon as the work is queued), this tool waits
+            up to wait_seconds for the retain to finish. When it finishes in time the
+            memory is available for recall. When it is still running, the response is
+            pending and carries an operation_id for get_operation. get_operation has to
+            be enabled to poll that id.
 
             Args:
                 content: The fact/memory to store (be specific and include relevant details)
@@ -1196,6 +1434,7 @@ def _register_sync_retain(mcp: FastMCP, memory: MemoryEngine, config: MCPToolsCo
                 metadata: Optional key-value metadata to attach (e.g., {'source': 'slack', 'channel': 'general'})
                 document_id: Optional document ID to associate this memory with
                 strategy: Optional named retain strategy (e.g., 'exact' for verbatim storage). Strategies are defined in the bank config.
+                wait_seconds: Seconds to wait before returning pending. Clamped to 0..25. Default: 20.
             """
             target_bank = await _resolve_bank(config, None)
             if target_bank is None:
@@ -1205,31 +1444,13 @@ def _register_sync_retain(mcp: FastMCP, memory: MemoryEngine, config: MCPToolsCo
             if error:
                 return {"status": "error", "message": error}
 
-            request_context = _get_request_context(config)
-
-            try:
-                result = await memory.retain_batch_async(
-                    bank_id=target_bank,
-                    contents=[content_dict],
-                    request_context=request_context,
-                    # `get`, not `pop`: the list above holds this same dict, so popping would
-                    # strip `strategy` off the item before the call runs and retain_params
-                    # would not capture it — a later reprocess then re-extracts under the
-                    # bank's default strategy.
-                    strategy=content_dict.get("strategy"),
-                )
-                memory_ids = [uid for batch in result for uid in batch]
-                return {
-                    "status": "completed",
-                    "message": "Memory stored successfully",
-                    "memory_ids": memory_ids,
-                }
-            except OperationValidationError as e:
-                logger.warning(f"Sync retain rejected: {e}")
-                return {"status": "error", "message": str(e)}
-            except Exception as e:
-                logger.error(f"Error in sync retain: {e}", exc_info=True)
-                return {"status": "error", "message": str(e)}
+            return await _sync_retain_operation(
+                memory,
+                config,
+                target_bank=target_bank,
+                content_dict=content_dict,
+                wait_seconds=wait_seconds,
+            )
 
 
 def _register_recall(mcp: FastMCP, memory: MemoryEngine, config: MCPToolsConfig) -> None:
@@ -1508,6 +1729,64 @@ def _register_recall(mcp: FastMCP, memory: MemoryEngine, config: MCPToolsConfig)
                 return {"error": str(e), "results": []}
 
 
+async def _reflect_operation(
+    memory: MemoryEngine,
+    config: MCPToolsConfig,
+    *,
+    target_bank: str,
+    query: str,
+    context: str | None,
+    budget: str,
+    max_tokens: int,
+    response_schema: dict | None,
+    tags: list[str] | None,
+    tags_match: TagsMatch,
+    apply_all_directives: bool,
+    include_based_on: bool,
+    include_trace: bool,
+    wait_seconds: int,
+) -> dict[str, Any]:
+    """Submit a reflect and wait. A finished answer has today's shape; a slow one is pending."""
+    budget_map = {"low": Budget.LOW, "mid": Budget.MID, "high": Budget.HIGH}
+    reflect_kwargs: dict[str, Any] = {
+        "query": query,
+        "budget": budget_map.get(budget.lower(), Budget.LOW),
+        "context": context,
+        "max_tokens": max_tokens,
+        "apply_all_directives": apply_all_directives,
+        "include_based_on": include_based_on,
+        "include_trace": include_trace,
+    }
+    if response_schema is not None:
+        reflect_kwargs["response_schema"] = response_schema
+    if tags is not None:
+        reflect_kwargs["tags"] = tags
+        reflect_kwargs["tags_match"] = tags_match
+    request_context = _get_request_context(config)
+    try:
+        submitted = await memory.submit_async_reflect(
+            bank_id=target_bank,
+            reflect_kwargs=reflect_kwargs,
+            request_context=request_context,
+        )
+        operation_id = str(submitted["operation_id"])
+        waited = await _wait_for_operation(
+            memory,
+            bank_id=target_bank,
+            operation_id=operation_id,
+            request_context=request_context,
+            wait_seconds=wait_seconds,
+            progress_message="reflect still running",
+        )
+        return _reflect_body(waited, operation_id)
+    except OperationValidationError as e:
+        logger.warning(f"Reflect rejected: {e}")
+        return {"error": str(e)}
+    except Exception as e:
+        logger.error(f"Error reflecting: {e}", exc_info=True)
+        return {"error": str(e), "text": ""}
+
+
 def _register_reflect(mcp: FastMCP, memory: MemoryEngine, config: MCPToolsConfig) -> None:
     """Register the reflect tool."""
 
@@ -1526,6 +1805,7 @@ def _register_reflect(mcp: FastMCP, memory: MemoryEngine, config: MCPToolsConfig
             include_based_on: bool = False,
             include_trace: bool = False,
             bank_id: str | None = None,
+            wait_seconds: int = 20,
         ) -> str:
             """
             Generate thoughtful analysis by synthesizing stored memories with the bank's personality.
@@ -1559,47 +1839,29 @@ def _register_reflect(mcp: FastMCP, memory: MemoryEngine, config: MCPToolsConfig
                 include_based_on: Include source facts used for synthesis. Defaults to false because broad reflections can exceed MCP client result limits.
                 include_trace: Include the reflection's internal trace fields (tool_trace/llm_trace and directives_applied). Defaults to false because the trace can be tens of KB and overflow MCP client context; enable only for debugging.
                 bank_id: Optional bank to reflect in (defaults to session bank). Use for cross-bank operations.
+                wait_seconds: Seconds to wait before returning pending. Clamped to 0..25. Default: 20. A finished reflect has the same shape as before. A reflect that is still running returns status "pending", an operation_id, and a hint to call get_reflect_result.
             """
             try:
                 target_bank = await _resolve_bank(config, bank_id)
                 if target_bank is None:
                     return "Error: No bank_id configured"
-
-                budget_map = {"low": Budget.LOW, "mid": Budget.MID, "high": Budget.HIGH}
-                budget_enum = budget_map.get(budget.lower(), Budget.LOW)
-
-                reflect_kwargs: dict[str, Any] = {
-                    "bank_id": target_bank,
-                    "query": query,
-                    "budget": budget_enum,
-                    "context": context,
-                    "max_tokens": max_tokens,
-                    "apply_all_directives": apply_all_directives,
-                    "request_context": _get_request_context(config),
-                }
-                if response_schema is not None:
-                    reflect_kwargs["response_schema"] = response_schema
-                if tags is not None:
-                    reflect_kwargs["tags"] = tags
-                    reflect_kwargs["tags_match"] = tags_match
-
-                reflect_result = await memory.reflect_async(**reflect_kwargs)
-
-                result_data = json.loads(reflect_result.model_dump_json(indent=2))
-                if not include_based_on:
-                    result_data.pop("based_on", None)
-                if not include_trace:
-                    # The agentic reflect loop's trace fields can be tens of KB (full
-                    # mental-model text) and silently overflow MCP client context; the
-                    # REST API omits them by default too. directives_applied is built by
-                    # the engine "for the trace" and carries full directive content, so it
-                    # belongs with tool_trace/llm_trace here. Opt in via include_trace.
-                    result_data.pop("tool_trace", None)
-                    result_data.pop("llm_trace", None)
-                    result_data.pop("directives_applied", None)
-                if response_schema is not None and hasattr(reflect_result, "structured_output"):
-                    result_data["structured_output"] = reflect_result.structured_output
-                return json.dumps(result_data, indent=2)
+                payload = await _reflect_operation(
+                    memory,
+                    config,
+                    target_bank=target_bank,
+                    query=query,
+                    context=context,
+                    budget=budget,
+                    max_tokens=max_tokens,
+                    response_schema=response_schema,
+                    tags=tags,
+                    tags_match=tags_match,
+                    apply_all_directives=apply_all_directives,
+                    include_based_on=include_based_on,
+                    include_trace=include_trace,
+                    wait_seconds=wait_seconds,
+                )
+                return json.dumps(payload, indent=2)
             except OperationValidationError as e:
                 logger.warning(f"Reflect rejected: {e}")
                 return json.dumps({"error": str(e)})
@@ -1621,6 +1883,7 @@ def _register_reflect(mcp: FastMCP, memory: MemoryEngine, config: MCPToolsConfig
             apply_all_directives: bool = False,
             include_based_on: bool = False,
             include_trace: bool = False,
+            wait_seconds: int = 20,
         ) -> dict:
             """
             Generate thoughtful analysis by synthesizing stored memories with the bank's personality.
@@ -1653,53 +1916,108 @@ def _register_reflect(mcp: FastMCP, memory: MemoryEngine, config: MCPToolsConfig
                 apply_all_directives: Apply every active directive regardless of tags. By default directives are scoped like memories (untagged always apply; tagged apply only when tags match). Set true to apply all directives, ignoring tag scope.
                 include_based_on: Include source facts used for synthesis. Defaults to false because broad reflections can exceed MCP client result limits.
                 include_trace: Include the reflection's internal trace fields (tool_trace/llm_trace and directives_applied). Defaults to false because the trace can be tens of KB and overflow MCP client context; enable only for debugging.
+                wait_seconds: Seconds to wait before returning pending. Clamped to 0..25. Default: 20. A finished reflect has the same shape as before. A reflect that is still running returns status "pending", an operation_id, and a hint to call get_reflect_result.
             """
             try:
                 target_bank = await _resolve_bank(config, None)
                 if target_bank is None:
                     return {"error": "No bank_id configured", "text": ""}
-
-                budget_map = {"low": Budget.LOW, "mid": Budget.MID, "high": Budget.HIGH}
-                budget_enum = budget_map.get(budget.lower(), Budget.LOW)
-
-                reflect_kwargs: dict[str, Any] = {
-                    "bank_id": target_bank,
-                    "query": query,
-                    "budget": budget_enum,
-                    "context": context,
-                    "max_tokens": max_tokens,
-                    "apply_all_directives": apply_all_directives,
-                    "request_context": _get_request_context(config),
-                }
-                if response_schema is not None:
-                    reflect_kwargs["response_schema"] = response_schema
-                if tags is not None:
-                    reflect_kwargs["tags"] = tags
-                    reflect_kwargs["tags_match"] = tags_match
-
-                reflect_result = await memory.reflect_async(**reflect_kwargs)
-
-                result_data = reflect_result.model_dump()
-                if not include_based_on:
-                    result_data.pop("based_on", None)
-                if not include_trace:
-                    # The agentic reflect loop's trace fields can be tens of KB (full
-                    # mental-model text) and silently overflow MCP client context; the
-                    # REST API omits them by default too. directives_applied is built by
-                    # the engine "for the trace" and carries full directive content, so it
-                    # belongs with tool_trace/llm_trace here. Opt in via include_trace.
-                    result_data.pop("tool_trace", None)
-                    result_data.pop("llm_trace", None)
-                    result_data.pop("directives_applied", None)
-                if response_schema is not None and hasattr(reflect_result, "structured_output"):
-                    result_data["structured_output"] = reflect_result.structured_output
-                return result_data
+                return await _reflect_operation(
+                    memory,
+                    config,
+                    target_bank=target_bank,
+                    query=query,
+                    context=context,
+                    budget=budget,
+                    max_tokens=max_tokens,
+                    response_schema=response_schema,
+                    tags=tags,
+                    tags_match=tags_match,
+                    apply_all_directives=apply_all_directives,
+                    include_based_on=include_based_on,
+                    include_trace=include_trace,
+                    wait_seconds=wait_seconds,
+                )
             except OperationValidationError as e:
                 logger.warning(f"Reflect rejected: {e}")
                 return {"error": str(e)}
             except Exception as e:
                 logger.error(f"Error reflecting: {e}", exc_info=True)
                 return {"error": str(e), "text": ""}
+
+
+def _register_get_reflect_result(mcp: FastMCP, memory: MemoryEngine, config: MCPToolsConfig) -> None:
+    """Register the tool that reads an answer a reflect handed back as pending."""
+
+    async def _run(target_bank: str, operation_id: str, wait_seconds: int) -> dict[str, Any]:
+        # get_operation_status filters on bank_id, so another bank's operation is not_found.
+        waited = await _wait_for_operation(
+            memory,
+            bank_id=target_bank,
+            operation_id=operation_id,
+            request_context=_get_request_context(config),
+            wait_seconds=wait_seconds,
+            progress_message="reflect still running",
+        )
+        return _reflect_body(waited, operation_id)
+
+    if config.include_bank_id_param:
+
+        @mcp.tool(annotations=_tool_annotations("get_reflect_result"))
+        async def get_reflect_result(
+            operation_id: str,
+            wait_seconds: int = 20,
+            bank_id: str | None = None,
+        ) -> str:
+            """
+            Fetch the answer for a reflect that returned pending.
+
+            The operation must belong to this bank. A completed reflect returns the
+            same body reflect would have returned. A reflect that is still running
+            returns status "pending". A failed, cancelled, missing, or non-reflect
+            operation returns an error.
+
+            Args:
+                operation_id: The operation_id from a pending reflect.
+                wait_seconds: Seconds to wait before returning pending again. Clamped to 0..25. Default: 20.
+                bank_id: Optional bank (defaults to session bank). Use for cross-bank operations.
+            """
+            return await _run_tool(
+                config,
+                bank_id=bank_id,
+                as_json=True,
+                action="getting reflect result",
+                value_error="rejection",
+                run=lambda target_bank: _run(target_bank, operation_id, wait_seconds),
+            )
+
+    else:
+
+        @mcp.tool(annotations=_tool_annotations("get_reflect_result"))
+        async def get_reflect_result(
+            operation_id: str,
+            wait_seconds: int = 20,
+        ) -> dict:
+            """
+            Fetch the answer for a reflect that returned pending.
+
+            The operation must belong to this bank. A completed reflect returns the
+            same body reflect would have returned. A reflect that is still running
+            returns status "pending". A failed, cancelled, missing, or non-reflect
+            operation returns an error.
+
+            Args:
+                operation_id: The operation_id from a pending reflect.
+                wait_seconds: Seconds to wait before returning pending again. Clamped to 0..25. Default: 20.
+            """
+            return await _run_tool(
+                config,
+                bank_id=None,
+                as_json=False,
+                action="getting reflect result",
+                value_error="rejection",
+                run=lambda target_bank: _run(target_bank, operation_id, wait_seconds),
+            )
 
 
 def _register_list_banks(mcp: FastMCP, memory: MemoryEngine, config: MCPToolsConfig) -> None:
@@ -4123,7 +4441,7 @@ def _register_list_operations(mcp: FastMCP, memory: MemoryEngine, config: MCPToo
 
             Args:
                 status: Filter by status: 'pending', 'running', 'completed', 'failed', 'cancelled'
-                type: Filter by operation type: 'retain', 'consolidation', 'refresh_mental_model',
+                type: Filter by operation type: 'retain', 'reflect', 'consolidation', 'refresh_mental_model',
                     'file_convert_retain', 'webhook_delivery'
                 limit: Maximum number of results, 1-100 (default: 20)
                 offset: Number of operations to skip (default: 0). Page until you reach 'total'.
@@ -4155,7 +4473,7 @@ def _register_list_operations(mcp: FastMCP, memory: MemoryEngine, config: MCPToo
 
             Args:
                 status: Filter by status: 'pending', 'running', 'completed', 'failed', 'cancelled'
-                type: Filter by operation type: 'retain', 'consolidation', 'refresh_mental_model',
+                type: Filter by operation type: 'retain', 'reflect', 'consolidation', 'refresh_mental_model',
                     'file_convert_retain', 'webhook_delivery'
                 limit: Maximum number of results, 1-100 (default: 20)
                 offset: Number of operations to skip (default: 0). Page until you reach 'total'.
@@ -4191,7 +4509,8 @@ def _register_get_operation(mcp: FastMCP, memory: MemoryEngine, config: MCPTools
             """
             Get the status of an async operation.
 
-            Check progress of background tasks like retain processing or mental model refresh.
+            Check progress of background tasks like retain processing, reflect, or mental model refresh.
+            A pending sync_retain returns an operation_id for this tool. A pending reflect is read with get_reflect_result, which returns the answer rather than the operation row.
 
             Args:
                 operation_id: The ID of the operation to check
@@ -4214,7 +4533,8 @@ def _register_get_operation(mcp: FastMCP, memory: MemoryEngine, config: MCPTools
             """
             Get the status of an async operation.
 
-            Check progress of background tasks like retain processing or mental model refresh.
+            Check progress of background tasks like retain processing, reflect, or mental model refresh.
+            A pending sync_retain returns an operation_id for this tool. A pending reflect is read with get_reflect_result, which returns the answer rather than the operation row.
 
             Args:
                 operation_id: The ID of the operation to check
