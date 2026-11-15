@@ -163,6 +163,8 @@ The theme is always on. Tokens, the grain tile and the blocking theme script liv
 is limited to dialogs, menus and popovers. `main` and `aside` stay sharp. The
 `.dark` class comes from the `hs-theme` cookie during server render and from a
 parser-blocking inline script, so the first paint is not the old blue palette.
+The bank frame is a 232px rail (collapse saved on the `hs-sidebar` cookie), a
+command menu in the top bar, and a solid bottom tab bar on phones.
 
 With Playwright available, run `node tests/custom/theme/layering-browser.cjs` from
 `hindsight-control-plane/` for light/dark checks at 390, 768 and 1440px.
@@ -170,9 +172,12 @@ With Playwright available, run `node tests/custom/theme/layering-browser.cjs` fr
 | File                          | Marker names                                        | Purpose                                                         |
 | ----------------------------- | --------------------------------------------------- | --------------------------------------------------------------- |
 | `src/app/globals.css`         | `theme-quiet-paper-entry`                           | Import the token stylesheet into the critical CSS.              |
-| `src/app/[locale]/layout.tsx` | `theme-quiet-paper-fonts`, `theme-quiet-paper-boot` | Geist Sans and Geist Mono, cookie class, blocking theme script. |
+| `src/app/[locale]/layout.tsx` | `theme-quiet-paper-fonts`, `theme-quiet-paper-boot`, `frame-quiet-paper-seed` | Geist, theme cookie, blocking script, sidebar cookie. |
 | `src/lib/theme-context.tsx`   | `theme-quiet-paper-persist`                         | Keep the saved theme on the `hs-theme` cookie.                  |
 | `src/lib/page-download.tsx`   | `theme-quiet-paper-print`                           | Print margin uses the same accent.                              |
+| `src/components/sidebar.tsx`  | `frame-quiet-paper-rail`                            | 232px rail, saved collapse, phone drawer optional.              |
+| `src/app/[locale]/banks/[bankId]/page.tsx` | `frame-quiet-paper-shell`              | Bottom tab bar and room for it under the page.                  |
+| `src/components/bank-selector.tsx` | `frame-quiet-paper-bar`                       | Command menu and a 44px theme control in the top bar.           |
 
-The recursive registry accepts registered `brain-` and `theme-` namespaces, with
+The recursive registry accepts registered `brain-`, `theme-` and `frame-` namespaces, with
 unique paired markers and exact file matching.

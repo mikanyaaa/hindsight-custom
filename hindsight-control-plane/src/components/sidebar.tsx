@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useTranslations } from "next-intl";
 import { useBank } from "@/lib/bank-context";
@@ -22,6 +22,14 @@ import {
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { client } from "@/lib/api";
+// CUSTOM-HOOK: frame-quiet-paper-rail begin
+import {
+  collapsedSnapshot,
+  setSidebarCollapsed,
+  subscribeSidebar,
+} from "@/custom/frame/sidebar-state";
+import { useSidebarServerCollapsed } from "@/custom/frame/sidebar-provider";
+// CUSTOM-HOOK: frame-quiet-paper-rail end
 
 type NavItem =
   | "home"
@@ -36,6 +44,8 @@ type NavItem =
 interface SidebarProps {
   currentTab: NavItem;
   onTabChange: (tab: NavItem) => void;
+  /** Phones use the bottom tab bar. Tests still open this drawer by default. */
+  drawer?: boolean;
 }
 
 // The header's menu button (phones only) opens the drawer through this event, so
@@ -58,12 +68,19 @@ export function SidebarMenuButton() {
   );
 }
 
-export function Sidebar({ currentTab, onTabChange }: SidebarProps) {
+export function Sidebar({ currentTab, onTabChange, drawer = true }: SidebarProps) {
   const t = useTranslations("bank.sidebar");
   const tBank = useTranslations("bank");
   const tCommon = useTranslations("common");
   const { currentBank, currentBankName } = useBank();
-  const [isCollapsed, setIsCollapsed] = useState(true);
+  const serverCollapsed = useSidebarServerCollapsed();
+  // Server snapshot is the cookie the layout already rendered. The client
+  // snapshot reads that same cookie, so a saved collapse does not hydrate twice.
+  const isCollapsed = useSyncExternalStore(
+    subscribeSidebar,
+    collapsedSnapshot,
+    () => serverCollapsed
+  );
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [apiVersion, setApiVersion] = useState<string | null>(null);
 
@@ -128,9 +145,9 @@ export function Sidebar({ currentTab, onTabChange }: SidebarProps) {
                   // Middle-click or Ctrl/Cmd+click will naturally open in new tab
                 }}
                 className={cn(
-                  "w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all cursor-pointer",
+                  "flex min-h-11 w-full items-center gap-3 rounded-[10px] px-3 text-sm font-medium cursor-pointer motion-reduce:transition-none",
                   isActive
-                    ? "bg-primary-gradient text-white shadow-sm"
+                    ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
                   collapsed && "justify-center px-0"
                 )}
@@ -154,18 +171,18 @@ export function Sidebar({ currentTab, onTabChange }: SidebarProps) {
   // collapse button stop propagation so they don't also flip it. The aside
   // carries no button role — it wraps the nav, and the bottom button is the
   // one control assistive tech and the keyboard use to toggle.
-  const toggleCollapsed = () => setIsCollapsed((v) => !v);
+  const toggleCollapsed = () => setSidebarCollapsed(!isCollapsed);
   const toggleLabel = isCollapsed ? t("expandSidebar") : t("collapseSidebar");
 
   return (
     <>
-      {/* Desktop and tablet: a rail beside the content. Phones get the drawer
-          below instead, so the content keeps the full screen width. */}
+      {/* Desktop and tablet: a 232px rail. The bank page turns the phone drawer
+          off and uses the bottom tab bar, so this column stays off-screen there. */}
       <aside
         onClick={toggleCollapsed}
         className={cn(
-          "hidden md:flex bg-card border-r border-border flex-col h-full transition-all duration-300 cursor-pointer select-none",
-          isCollapsed ? "w-16" : "w-64"
+          "hidden md:flex bg-card border-r border-border flex-col h-full cursor-pointer select-none transition-[width] duration-200 motion-reduce:transition-none",
+          isCollapsed ? "w-16" : "w-[232px]"
         )}
       >
         {renderNav(isCollapsed, "bank-sidebar-nav")}
@@ -190,7 +207,7 @@ export function Sidebar({ currentTab, onTabChange }: SidebarProps) {
               toggleCollapsed();
             }}
             className={cn(
-              "w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer",
+              "flex min-h-11 w-full items-center gap-3 rounded-[10px] px-3 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer",
               isCollapsed && "justify-center px-0"
             )}
             aria-expanded={!isCollapsed}
@@ -210,34 +227,37 @@ export function Sidebar({ currentTab, onTabChange }: SidebarProps) {
         </div>
       </aside>
 
-      {/* Phones: the same nav in a drawer, opened by SidebarMenuButton. */}
-      <DialogPrimitive.Root open={drawerOpen} onOpenChange={setDrawerOpen}>
-        <DialogPrimitive.Portal>
-          <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/60 md:hidden animate-soft-fade-in" />
-          <DialogPrimitive.Content className="fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-card border-r border-border shadow-xl pb-[env(safe-area-inset-bottom)] md:hidden animate-drawer-in">
-            <div className="flex items-center justify-between border-b border-border px-4 py-3">
-              <DialogPrimitive.Title className="truncate text-sm font-semibold">
-                {currentBankName || currentBank}
-              </DialogPrimitive.Title>
-              <DialogPrimitive.Close
-                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-                aria-label={tCommon("close")}
-              >
-                <X className="h-5 w-5" />
-              </DialogPrimitive.Close>
-            </div>
-            <DialogPrimitive.Description className="sr-only">
-              {t("memoryBank")}
-            </DialogPrimitive.Description>
-            {renderNav(false)}
-            {apiVersion && (
-              <div className="border-t border-border p-3 text-center text-xs text-muted-foreground/60">
-                {`Hindsight v${apiVersion}`}
+      {/* Phones: the same nav in a drawer, opened by SidebarMenuButton.
+          The bank page passes drawer={false} and uses the bottom tab bar. */}
+      {drawer && (
+        <DialogPrimitive.Root open={drawerOpen} onOpenChange={setDrawerOpen}>
+          <DialogPrimitive.Portal>
+            <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/60 md:hidden animate-soft-fade-in" />
+            <DialogPrimitive.Content className="fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-card border-r border-border shadow-xl pb-[env(safe-area-inset-bottom)] md:hidden animate-drawer-in">
+              <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                <DialogPrimitive.Title className="truncate text-sm font-semibold">
+                  {currentBankName || currentBank}
+                </DialogPrimitive.Title>
+                <DialogPrimitive.Close
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+                  aria-label={tCommon("close")}
+                >
+                  <X className="h-5 w-5" />
+                </DialogPrimitive.Close>
               </div>
-            )}
-          </DialogPrimitive.Content>
-        </DialogPrimitive.Portal>
-      </DialogPrimitive.Root>
+              <DialogPrimitive.Description className="sr-only">
+                {t("memoryBank")}
+              </DialogPrimitive.Description>
+              {renderNav(false)}
+              {apiVersion && (
+                <div className="border-t border-border p-3 text-center text-xs text-muted-foreground/60">
+                  {`Hindsight v${apiVersion}`}
+                </div>
+              )}
+            </DialogPrimitive.Content>
+          </DialogPrimitive.Portal>
+        </DialogPrimitive.Root>
+      )}
     </>
   );
 }

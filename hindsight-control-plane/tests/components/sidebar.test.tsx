@@ -3,8 +3,9 @@
  * The sidebar must not be one big button: a `role="button"` aside wrapping the nav
  * hides the links from screen readers (#5559). The bottom button is the only toggle.
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { setSidebarCollapsed } from "@/custom/frame/sidebar-state";
 
 vi.mock("next-intl", () => ({ useTranslations: () => (key: string) => key }));
 vi.mock("@/lib/bank-context", () => ({ useBank: () => ({ currentBank: "alpha" }) }));
@@ -14,6 +15,7 @@ vi.mock("@/lib/api", () => ({
 
 const { Sidebar, SidebarMenuButton } = await import("@/components/sidebar");
 
+beforeEach(() => setSidebarCollapsed(false));
 afterEach(() => cleanup());
 
 describe("Sidebar accessibility", () => {
@@ -23,8 +25,8 @@ describe("Sidebar accessibility", () => {
     const toggles = screen.getAllByRole("button");
     expect(toggles).toHaveLength(1);
     const toggle = toggles[0];
-    expect(toggle.getAttribute("aria-label")).toBe("expandSidebar");
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(toggle.getAttribute("aria-label")).toBe("collapseSidebar");
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
     expect(toggle.getAttribute("aria-controls")).toBe("bank-sidebar-nav");
 
     const nav = screen.getByRole("navigation");
@@ -37,8 +39,8 @@ describe("Sidebar accessibility", () => {
     expect(screen.getAllByRole("link")).toHaveLength(8);
 
     fireEvent.click(toggle);
-    expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    expect(toggle.getAttribute("aria-label")).toBe("collapseSidebar");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(toggle.getAttribute("aria-label")).toBe("expandSidebar");
   });
 
   it("opens the phone drawer from the header menu button and closes it on navigation", () => {
