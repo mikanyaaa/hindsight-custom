@@ -9,6 +9,18 @@ import type { GraphData, GraphNode, GraphLink } from "./graph-data";
 import type { BrainRenderer } from "@/custom/brain/render-model";
 import { BRAIN_ENABLED } from "@/custom/brain/feature";
 // CUSTOM-HOOK: brain-network-imports end
+// CUSTOM-HOOK: graph-frame-import begin
+import {
+  ambientDelayMs,
+  ambientUsesNextFrame,
+  blitCameraSnapshot,
+  graphDevicePixelRatio,
+  motionStartsPaused,
+  prefersReducedMotion,
+  retainCameraSnapshot,
+  type CameraSnapshot,
+} from "@/custom/graph/frame";
+// CUSTOM-HOOK: graph-frame-import end
 
 // ============================================================================
 // Types
@@ -283,6 +295,8 @@ function NetworkConstellation({
   const tooltipRef = useRef<HTMLDivElement>(null);
   const isDark = useIsDarkMode();
   const animRef = useRef<number>(0);
+  const ambientTimerRef = useRef(0);
+  const snapshotRef = useRef<CameraSnapshot | null>(null);
   const requestDrawRef = useRef<() => void>(() => {});
   const updateTooltipRef = useRef<(x: number, y: number) => void>(() => {});
   const fittedNodesRef = useRef<PreparedNode[] | null>(null);
@@ -297,11 +311,13 @@ function NetworkConstellation({
   const clockRef = useRef({ seconds: 0, lastFrameMs: 0 });
 
   useEffect(() => {
+    // CUSTOM-HOOK: graph-frame-motion begin
     const saved = localStorage.getItem(MOTION_STORAGE_KEY);
-    if (saved === "off") {
+    if (motionStartsPaused(saved, prefersReducedMotion())) {
       setMotionEnabled(false);
       motionRef.current = false;
     }
+    // CUSTOM-HOOK: graph-frame-motion end
   }, []);
 
   const toggleMotion = useCallback(() => {
@@ -585,6 +601,7 @@ function NetworkConstellation({
     if (!ctx) return;
 
     const s = stateRef.current;
+    const frameStarted = typeof performance !== "undefined" ? performance.now() : 0;
 
     // Snap the final subpixel remainder so paused views can become truly idle.
     const cameraMoving =
@@ -597,11 +614,39 @@ function NetworkConstellation({
       s.zoom = s.targetZoom;
     }
     // Smooth interpolation
+    // CUSTOM-HOOK: graph-frame-snapshot begin
+    // The bitmap still shows the pre-lerp pose. Reuse it while the camera eases
+    // so a pan or zoom does not restroke every curve on the way.
+    const renderedCamera = {
+      W: s.W,
+      H: s.H,
+      dpr: s.dpr,
+      panX: s.panX,
+      panY: s.panY,
+      zoom: s.zoom,
+    };
     s.panX = lerp(s.panX, s.targetPanX, 0.12);
     s.panY = lerp(s.panY, s.targetPanY, 0.12);
     s.zoom = lerp(s.zoom, s.targetZoom, 0.12);
 
     const { W, H, dpr, zoom, panX, panY, mouseX, mouseY } = s;
+    if (cameraMoving) {
+      if (!snapshotRef.current?.active) {
+        snapshotRef.current = retainCameraSnapshot(canvas, renderedCamera, snapshotRef.current);
+      }
+      if (snapshotRef.current?.active) {
+        blitCameraSnapshot(
+          ctx,
+          snapshotRef.current,
+          { W, H, dpr, panX, panY, zoom },
+          isDark ? "#09090b" : "#ffffff"
+        );
+        clockRef.current.lastFrameMs = frameStarted;
+        requestDrawRef.current();
+        return;
+      }
+    }
+    // CUSTOM-HOOK: graph-frame-snapshot end
     const cx = W / 2 + panX;
     const cy = H / 2 + panY;
     const margin = 60;
@@ -1071,11 +1116,40 @@ function NetworkConstellation({
 
     ctx.restore();
 
-    // Paused graphs redraw only for input/data/resize, while camera easing still
-    // completes. Ambient motion keeps its existing appearance and cadence.
-    if ((motionRef.current && preparedNodes.length > 0) || cameraMoving) {
+    // CUSTOM-HOOK: graph-frame-sample begin
+    // Paused graphs redraw only for input. Ambient drift is sampled when the
+    // motion is visible, instead of restroking the field on every display frame.
+    if (snapshotRef.current) snapshotRef.current.active = false;
+    const jsMs = (typeof performance !== "undefined" ? performance.now() : 0) - frameStarted;
+    const delay = ambientDelayMs(zoom, jsMs);
+    const hoverHeavy = hoveredLinks.size > 250;
+    const hoverLive =
+      motionRef.current && hoverIndex >= 0 && !hoverHeavy && ambientUsesNextFrame(delay);
+    if (cameraMoving || hoverLive) {
       requestDrawRef.current();
+    } else if (motionRef.current && preparedNodes.length > 0) {
+      if (ambientUsesNextFrame(delay)) {
+        requestDrawRef.current();
+      } else if (ambientTimerRef.current === 0) {
+        // The callback time misses the raster. Measure through paint, then wait
+        // out whatever the full cost still owes on top of the visible-drift gap.
+        ambientTimerRef.current = window.setTimeout(() => {
+          ambientTimerRef.current = 0;
+          const cost = (typeof performance !== "undefined" ? performance.now() : 0) - frameStarted;
+          const full = ambientDelayMs(zoom, cost);
+          const remaining = Math.max(0, full - cost);
+          if (remaining === 0) {
+            requestDrawRef.current();
+            return;
+          }
+          ambientTimerRef.current = window.setTimeout(() => {
+            ambientTimerRef.current = 0;
+            requestDrawRef.current();
+          }, remaining);
+        }, 0);
+      }
     }
+    // CUSTOM-HOOK: graph-frame-sample end
   }, [
     isDark,
     preparedNodes,
@@ -1174,15 +1248,24 @@ function NetworkConstellation({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    // CUSTOM-HOOK: graph-frame-draw begin
     const requestDraw = () => {
+      if (ambientTimerRef.current) {
+        window.clearTimeout(ambientTimerRef.current);
+        ambientTimerRef.current = 0;
+      }
       if (!document.hidden && animRef.current === 0) {
         animRef.current = requestAnimationFrame(animate);
       }
     };
+    // CUSTOM-HOOK: graph-frame-draw end
     requestDrawRef.current = requestDraw;
     const resize = () => {
-      const dpr = window.devicePixelRatio || 1;
       const rect = canvas.getBoundingClientRect();
+      // CUSTOM-HOOK: graph-frame-dpr begin
+      if (snapshotRef.current) snapshotRef.current.active = false;
+      const dpr = graphDevicePixelRatio(rect.width, rect.height);
+      // CUSTOM-HOOK: graph-frame-dpr end
       const W = rect.width;
       const H = rect.height;
       canvas.width = W * dpr;
@@ -1428,6 +1511,10 @@ function NetworkConstellation({
     return () => {
       cancelAnimationFrame(animRef.current);
       animRef.current = 0;
+      if (ambientTimerRef.current) {
+        window.clearTimeout(ambientTimerRef.current);
+        ambientTimerRef.current = 0;
+      }
       requestDrawRef.current = () => {};
       updateTooltipRef.current = () => {};
       document.removeEventListener("visibilitychange", handleVisibility);
@@ -1460,8 +1547,10 @@ function NetworkConstellation({
     if (!canvasRef.current) return;
     // Small delay to let the DOM update
     const timer = setTimeout(() => {
-      const dpr = window.devicePixelRatio || 1;
       const rect = canvasRef.current!.getBoundingClientRect();
+      // Same backing-store cap as graph-frame-dpr.
+      if (snapshotRef.current) snapshotRef.current.active = false;
+      const dpr = graphDevicePixelRatio(rect.width, rect.height);
       canvasRef.current!.width = rect.width * dpr;
       canvasRef.current!.height = rect.height * dpr;
       stateRef.current.dpr = dpr;
