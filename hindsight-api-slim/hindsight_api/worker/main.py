@@ -131,7 +131,7 @@ def _http_server(app: Callable[..., Any], host: str, port: int) -> "uvicorn.Serv
 
 def create_worker_app(poller: WorkerPoller, memory):
     """Create a minimal FastAPI app for worker metrics and health."""
-    from fastapi import FastAPI
+    from fastapi import FastAPI, Request
     from fastapi.responses import JSONResponse, Response
     from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
@@ -159,13 +159,24 @@ def create_worker_app(poller: WorkerPoller, memory):
         metrics_collector.set_db_pool(memory._pool)
         logger.info("DB pool metrics configured")
 
-    async def _readiness_response() -> JSONResponse:
-        """Shared body of /health and /health/ready: 200 if healthy, 503 if not."""
+    async def _readiness_response(request: Request) -> JSONResponse:
+        """Shared body of /health and /health/ready: 200 if healthy, 503 if not.
+
+        CUSTOM-HOOK: public-health-worker
+        Anonymous callers get status only. Worker identity and pool counters
+        require a credential this process actually checks.
+        """
+        from hindsight_api.api.public_health import diagnostics_allowed, is_ready, public_health_body
+
         health = await memory.health_check()
         health["worker_id"] = poller.worker_id
         health["is_shutdown"] = poller.is_shutdown
-        status_code = 200 if health.get("status") == "healthy" else 503
-        return JSONResponse(content=health, status_code=status_code)
+        ready = is_ready(health)
+        status_code = 200 if ready else 503
+        extension = getattr(memory, "_tenant_extension", None)
+        if await diagnostics_allowed(request.headers.get("authorization"), extension):
+            return JSONResponse(content=health, status_code=status_code)
+        return JSONResponse(content=public_health_body(ready, "hindsight-worker").model_dump(), status_code=status_code)
 
     @app.get(
         "/health",
@@ -174,9 +185,9 @@ def create_worker_app(poller: WorkerPoller, memory):
         "connectivity. Alias of /health/ready. Use /health/live for liveness probes.",
         tags=["Monitoring"],
     )
-    async def health_endpoint():
+    async def health_endpoint(request: Request):
         """Health check endpoint."""
-        return await _readiness_response()
+        return await _readiness_response(request)
 
     @app.get(
         "/health/ready",
@@ -185,9 +196,9 @@ def create_worker_app(poller: WorkerPoller, memory):
         "Identical to /health, which stays supported as its alias.",
         tags=["Monitoring"],
     )
-    async def readiness_endpoint():
+    async def readiness_endpoint(request: Request):
         """Readiness probe that verifies database connectivity."""
-        return await _readiness_response()
+        return await _readiness_response(request)
 
     @app.get(
         "/health/live",

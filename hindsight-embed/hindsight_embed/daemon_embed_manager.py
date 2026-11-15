@@ -827,10 +827,15 @@ class DaemonEmbedManager(EmbedManager):
             return False
         try:
             health = response.json()
-            return health.get("status") == "healthy" and health.get("database") == "connected"
         except (ValueError, AttributeError):
             # Not JSON, or JSON that is not an object: not Hindsight's payload.
             return False
+        status = health.get("status") if isinstance(health, dict) else None
+        # Current public body is status plus the service name, with no pool data.
+        # Older processes still answer with the database field.
+        if status == "ok" and health.get("service") == "hindsight":
+            return True
+        return status == "healthy" and health.get("database") == "connected"
 
     def _wait_for_port_health(self, port: int, timeout: float | None = None) -> bool:
         """Wait briefly for a just-bound daemon port to become healthy.

@@ -39,7 +39,7 @@ pub fn health(client: &ApiClient, verbose: bool, output_format: OutputFormat) ->
                         version: None,
                     });
 
-                let status_str = if result.status == "healthy" {
+                let status_str = if result.status == "healthy" || result.status == "ok" {
                     ui::gradient_start(&result.status)
                 } else {
                     ui::gradient_end(&result.status)
