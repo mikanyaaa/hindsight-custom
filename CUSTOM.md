@@ -64,7 +64,7 @@ The mirror has no Actions secrets, so jobs that need LLM/embedding/cloud credent
 | File | Job / step | Change |
 |---|---|---|
 | `.github/workflows/test.yml` | `detect-changes` output `has_secrets` | now also requires `github.repository == 'vectorize-io/hindsight'`. This single hook skips every job gated on `has_secrets`: `test-rust-cli`, `test-api` (3 shards), `test-api-llm-core`, `test-api-llm-acceptance`, `test-api-oracle`, `test-python-client`, `test-typescript-client`, `test-python-client-oracle`, `test-typescript-client-oracle`, `test-typescript-client-deno`, `test-rust-client`, `test-go-client`, `test-openclaw-integration`, `test-integration`, `test-pip-slim`, `test-embed`, `test-embed-windows`, `test-hindsight-all`, `test-doc-examples`, `test-upgrade` |
-| `.github/workflows/test.yml` | `build-docker-images` smoke steps | credential setup stays upstream-only. The matrix is now the control-plane image alone (see `ci-minutes`), which smokes without credentials |
+| `.github/workflows/test.yml` | `build-docker-images` smoke steps | credential setup stays upstream-only. The matrix is now the control-plane image alone (see `ci-minutes`). That container probe is `/api/health`, which stays HTTP 200 with no `HINDSIGHT_CP_ACCESS_KEY`, so it still smokes without credentials |
 | `.github/workflows/perf-test.yml` | `perf-test`, `amb`, `obs`, `system-evals` | `if: github.repository == 'vectorize-io/hindsight'` |
 | `.github/workflows/security-scan.yml` | `scan-published`, `scan-next-build` | `if: github.repository == 'vectorize-io/hindsight'` |
 | `.github/workflows/windows-smoke.yml` | `windows-client-smoke` | `if: github.repository == 'vectorize-io/hindsight'` |
@@ -82,7 +82,8 @@ Actions minutes are spent by CI, not by the scheduled workflows (those jobs alre
 | `.github/workflows/test.yml` | Draft PRs skip `detect-changes` (no runners). `ready_for_review` runs CI. No `push` trigger, so a branch push does not double a pull request. `concurrency` already cancels in progress. Root `*.md` is `paths-ignore`. |
 | `.github/workflows/test.yml` | `ci` path filter matches nothing, so a workflow-only edit does not fan out into every package job. |
 | `.github/workflows/test.yml` | `build-docs` runs for `hindsight-docs/**` only. `verify-generated-files` runs for generator inputs only. |
-| `.github/workflows/test.yml` | `build-docker-images` is the control-plane image only, and only when `docker/**` changes. |
+| `.github/workflows/test.yml` | `build-docker-images` is the control-plane image only, and only when `docker/**` changes. Its smoke still probes public `/api/health` and does not set an access key. |
+| `.github/workflows/test.yml` | `build-control-plane` smoke sets throwaway `HINDSIGHT_CP_ACCESS_KEY=ci-smoke-dummy` and checks that `/` redirects to `/login` and `/login` returns 200. It does not set `HINDSIGHT_CP_ALLOW_UNAUTHENTICATED`. |
 | `.github/workflows/test.yml` | `build-api-python-versions` is Python 3.11 only. `build-rust-cli-arm64` is upstream-only. |
 | `.github/workflows/perf-test.yml`, `security-scan.yml`, `windows-smoke.yml` | Schedules removed. `workflow_dispatch` remains. Security and Windows cancel in progress. |
 

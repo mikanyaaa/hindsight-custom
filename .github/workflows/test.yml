@@ -1337,21 +1337,35 @@ jobs:
         test -d hindsight-control-plane/standalone/node_modules || exit 1
         node hindsight-control-plane/bin/cli.js --help
 
+    # CUSTOM-HOOK ci-minutes: fail-closed refuses `/` when the access key is unset.
+    # A throwaway key keeps auth on. `/` must redirect to `/login`; `/login` must be 200.
+    # Do not set HINDSIGHT_CP_ALLOW_UNAUTHENTICATED here.
     - name: Smoke test - verify server starts
+      env:
+        HINDSIGHT_CP_ACCESS_KEY: ci-smoke-dummy
       run: |
         cd hindsight-control-plane
         node bin/cli.js --port 9999 &
         SERVER_PID=$!
+        cleanup() { kill "$SERVER_PID" 2>/dev/null || true; }
+        trap cleanup EXIT
         sleep 5
-        if curl -sf http://localhost:9999 > /dev/null 2>&1; then
-          echo "Server started successfully"
-          kill $SERVER_PID 2>/dev/null || true
-          exit 0
-        else
-          echo "Server failed to respond"
-          kill $SERVER_PID 2>/dev/null || true
+        root_code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:9999/)
+        root_location=$(curl -s -o /dev/null -w '%{redirect_url}' http://localhost:9999/)
+        login_code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:9999/login)
+        case "$root_code" in
+          301|302|303|307|308) ;;
+          *) echo "Expected / to redirect, got HTTP ${root_code}"; exit 1 ;;
+        esac
+        case "$root_location" in
+          */login*) ;;
+          *) echo "Expected / to redirect to /login, got ${root_location:-no Location}"; exit 1 ;;
+        esac
+        if [ "$login_code" != "200" ]; then
+          echo "Expected /login to return 200, got HTTP ${login_code}"
           exit 1
         fi
+        echo "Server started successfully"
 
   test-figures:
     needs: [detect-changes]
@@ -1742,6 +1756,8 @@ jobs:
         echo "HINDSIGHT_API_LLM_VERTEXAI_PROJECT_ID=$PROJECT_ID" >> $GITHUB_ENV
 
     # CUSTOM-HOOK ci-fork-scope: only the secret-free control-plane leg is smoke tested in the mirror.
+    # cp-only probes /api/health, which stays HTTP 200 with no access key.
+    # The node smoke in build-control-plane is the step that supplies a throwaway key.
     - name: Smoke test - verify container starts
       if: matrix.smoke && (github.repository == 'vectorize-io/hindsight' || matrix.name == 'control-plane')
       env:
