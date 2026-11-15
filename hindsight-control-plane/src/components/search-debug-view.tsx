@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
+// CUSTOM-HOOK: home-quiet-paper-recall begin
+import { useSearchParams } from "next/navigation";
+// CUSTOM-HOOK: home-quiet-paper-recall end
 import { client } from "@/lib/api";
 import { resolveTemporalWindow } from "@/lib/temporal-window";
 import { useBank } from "@/lib/bank-context";
@@ -17,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { FactType, FactTypeFilter } from "@/components/fact-type-filter";
+import { ALL_FACT_TYPES, FactType, FactTypeFilter } from "@/components/fact-type-filter";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -109,10 +112,16 @@ const exactScore = (v: number | null | undefined): string | undefined =>
 export function SearchDebugView() {
   const t = useTranslations("searchDebug");
   const { currentBank } = useBank();
+  // The home field lands here with the question already in the URL, and the
+  // recall should cover every fact type. Opening recall on its own still
+  // starts from world facts, which is the analyzer's own default.
+  const homeQuery = useSearchParams().get("q")?.trim() ?? "";
 
   // Query state
-  const [query, setQuery] = useState("");
-  const [factTypes, setFactTypes] = useState<FactType[]>(["world"]);
+  const [query, setQuery] = useState(homeQuery);
+  const [factTypes, setFactTypes] = useState<FactType[]>(
+    homeQuery ? [...ALL_FACT_TYPES] : ["world"]
+  );
   const [budget, setBudget] = useState<Budget>("mid");
   const [maxTokens, setMaxTokens] = useState(4096);
   const [queryDate, setQueryDate] = useState("");
@@ -285,6 +294,13 @@ export function SearchDebugView() {
       setLoading(false);
     }
   };
+
+  const homeRan = useRef(false);
+  useEffect(() => {
+    if (!homeQuery || !currentBank || homeRan.current) return;
+    homeRan.current = true;
+    void runSearch();
+  }, [currentBank, homeQuery]);
 
   if (!currentBank) {
     return (
