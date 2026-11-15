@@ -55,7 +55,7 @@ export function CommandPalette() {
       >
         <Search className="h-4 w-4 shrink-0" />
         <span className="hidden truncate sm:inline">{copy.openPalette}</span>
-        <kbd className="ml-auto hidden rounded-md border border-border px-1.5 py-0.5 font-mono text-[11px] md:inline">
+        <kbd className="ml-auto hidden rounded-md border border-border px-1.5 py-0.5 font-mono text-xs md:inline">
           ⌘K
         </kbd>
       </button>

@@ -87,7 +87,7 @@ export function ObservationScopeFilter({ scopes, value, onChange }: ObservationS
           role="combobox"
           aria-expanded={open}
           aria-label={t("scopeLabel")}
-          className="h-9 w-64 justify-start gap-1.5 px-3 font-normal"
+          className="h-11 w-64 justify-start gap-1.5 px-3 font-normal"
         >
           <Layers className="h-4 w-4 shrink-0 text-muted-foreground" />
           <span className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">

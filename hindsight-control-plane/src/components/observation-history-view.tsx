@@ -113,7 +113,7 @@ function TagsDiff({ before, after }: { before: string[]; after: string[] }) {
       {removed.map((t, idx) => (
         <span
           key={idx}
-          className="text-[10px] px-1.5 py-0.5 rounded-md bg-red-500/15 text-red-700 dark:text-red-400 border border-red-500/20 font-mono line-through"
+          className="text-xs px-1.5 py-0.5 rounded-md bg-red-500/15 text-red-700 dark:text-red-400 border border-red-500/20 font-mono line-through"
         >
           #{t}
         </span>
@@ -121,7 +121,7 @@ function TagsDiff({ before, after }: { before: string[]; after: string[] }) {
       {added.map((t, idx) => (
         <span
           key={idx}
-          className="text-[10px] px-1.5 py-0.5 rounded-md bg-green-500/15 text-green-700 dark:text-green-400 border border-green-500/20 font-mono"
+          className="text-xs px-1.5 py-0.5 rounded-md bg-green-500/15 text-green-700 dark:text-green-400 border border-green-500/20 font-mono"
         >
           +#{t}
         </span>
@@ -176,19 +176,17 @@ function SourceFactItem({ fact }: { fact: NonNullable<HistoryEntry["source_facts
     >
       <div className="flex items-center gap-1.5">
         {fact.type && (
-          <span
-            className={`text-[10px] px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${typeColors}`}
-          >
+          <span className={`text-xs px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${typeColors}`}>
             {fact.type}
           </span>
         )}
         {fact.is_new && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-green-500/15 text-green-700 dark:text-green-400 border border-green-500/30">
+          <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-green-500/15 text-green-700 dark:text-green-400 border border-green-500/30">
             {t("new")}
           </span>
         )}
         {fact.context && (
-          <span className="text-[10px] text-muted-foreground italic truncate">{fact.context}</span>
+          <span className="text-xs text-muted-foreground italic truncate">{fact.context}</span>
         )}
       </div>
       {fact.text ? (
@@ -234,7 +232,7 @@ export function ObservationHistoryView({
           <Button
             variant="outline"
             size="sm"
-            className="h-7 w-7 p-0"
+            className="h-11 w-11 p-0"
             disabled={idx === entries.length - 1}
             onClick={() => setIdx(idx + 1)}
           >
@@ -243,7 +241,7 @@ export function ObservationHistoryView({
           <Button
             variant="outline"
             size="sm"
-            className="h-7 w-7 p-0"
+            className="h-11 w-11 p-0"
             disabled={idx === 0}
             onClick={() => setIdx(idx - 1)}
           >

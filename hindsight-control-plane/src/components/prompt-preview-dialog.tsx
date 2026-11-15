@@ -233,9 +233,7 @@ function BlockControl({
 
   if (!block.editable) {
     return (
-      <span className="text-[11px] italic text-muted-foreground">
-        {t("promptPreviewServerLevel")}
-      </span>
+      <span className="text-xs italic text-muted-foreground">{t("promptPreviewServerLevel")}</span>
     );
   }
 
@@ -328,12 +326,12 @@ function EntityLabelsBlockEditor({
   return (
     <div className="mx-2 mb-2 space-y-2 rounded-md border border-border bg-background/60 p-2">
       <EntityLabelsEditor value={groups} onChange={setGroups} />
-      {error ? <p className="text-[10px] text-destructive">{error}</p> : null}
+      {error ? <p className="text-xs text-destructive">{error}</p> : null}
       <div className="flex justify-end gap-1">
-        <Button variant="ghost" size="sm" className="h-6 text-[11px]" onClick={onCancel}>
+        <Button variant="ghost" size="sm" className="h-11 text-xs" onClick={onCancel}>
           {t("promptPreviewCancel")}
         </Button>
-        <Button size="sm" className="h-6 text-[11px]" disabled={saving} onClick={save}>
+        <Button size="sm" className="h-11 text-xs" disabled={saving} onClick={save}>
           {saving ? <Spinner size="sm" /> : t("promptPreviewSave")}
         </Button>
       </div>
@@ -363,12 +361,12 @@ function BlockEditor({ editor, onCancel }: { editor: FieldEditor; onCancel: () =
           if (e.key === "Escape") onCancel();
         }}
       />
-      {editor.error ? <p className="text-[10px] text-destructive">{editor.error}</p> : null}
+      {editor.error ? <p className="text-xs text-destructive">{editor.error}</p> : null}
       <div className="flex justify-end gap-1">
-        <Button variant="ghost" size="sm" className="h-6 text-[11px]" onClick={onCancel}>
+        <Button variant="ghost" size="sm" className="h-11 text-xs" onClick={onCancel}>
           {t("promptPreviewCancel")}
         </Button>
-        <Button size="sm" className="h-6 text-[11px]" onClick={() => editor.save(editor.draft)}>
+        <Button size="sm" className="h-11 text-xs" onClick={() => editor.save(editor.draft)}>
           {t("promptPreviewSave")}
         </Button>
       </div>
@@ -490,14 +488,14 @@ function BlockCard({
             {copy.inactiveNote(block)}
           </p>
           {block.field ? (
-            <p className="font-mono text-[11px] text-muted-foreground">{block.field}</p>
+            <p className="font-mono text-xs text-muted-foreground">{block.field}</p>
           ) : null}
         </div>
       ) : null}
 
       {open && block.active && (
         <div className="mx-2 mb-2 space-y-1">
-          <p className="flex flex-wrap items-center gap-x-2 text-[11px] text-muted-foreground">
+          <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
             {block.field ? <span className="font-mono">{block.field}</span> : null}
             {block.field ? <span>·</span> : null}
             <span className="tabular-nums">
@@ -559,15 +557,15 @@ function ChunkCard({
         className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted/20"
       >
         <Chevron className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+        <span className="text-xs uppercase tracking-wide text-muted-foreground">
           {t("testerChunkLabel", { index: index + 1 })}
         </span>
-        <span className="text-[11px] text-muted-foreground">·</span>
-        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+        <span className="text-xs text-muted-foreground">·</span>
+        <span className="text-xs uppercase tracking-wide text-muted-foreground">
           {t("testerFactCount", { count: chunk.fact_count })}
         </span>
         {!open ? (
-          <span className="ml-2 min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
+          <span className="ml-2 min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
             {chunk.text}
           </span>
         ) : null}
@@ -639,7 +637,7 @@ function FactRow({ fact, fileNames }: { fact: Fact; fileNames?: Map<number, stri
             rather than left as another grey chip. */}
         <span
           className={cn(
-            "inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium",
+            "inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium",
             isExperience
               ? "bg-purple-100 text-purple-900 dark:bg-purple-500/25 dark:text-purple-100"
               : "bg-sky-100 text-sky-900 dark:bg-sky-500/25 dark:text-sky-100"
@@ -653,7 +651,7 @@ function FactRow({ fact, fileNames }: { fact: Fact; fileNames?: Map<number, stri
             on every row is noise standing in for absence. */}
         {fact.occurred_start ? (
           <span
-            className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-[11px] tabular-nums text-muted-foreground"
+            className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs tabular-nums text-muted-foreground"
             title={`${t("testerOccurredStart")} — ${fact.occurred_start}`}
           >
             <CalendarArrowUp className="h-3 w-3" />
@@ -662,7 +660,7 @@ function FactRow({ fact, fileNames }: { fact: Fact; fileNames?: Map<number, stri
         ) : null}
         {fact.occurred_end ? (
           <span
-            className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-[11px] tabular-nums text-muted-foreground"
+            className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs tabular-nums text-muted-foreground"
             title={`${t("testerOccurredEnd")} — ${fact.occurred_end}`}
           >
             <CalendarArrowDown className="h-3 w-3" />
@@ -673,7 +671,7 @@ function FactRow({ fact, fileNames }: { fact: Fact; fileNames?: Map<number, stri
         {(fact.attachments ?? []).map((attachment) => (
           <span
             key={attachment.block_index}
-            className="inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-0.5 text-[11px] text-amber-900 dark:bg-amber-500/25 dark:text-amber-100"
+            className="inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-900 dark:bg-amber-500/25 dark:text-amber-100"
             title={attachment.media_type}
           >
             <Paperclip className="h-3 w-3" />
@@ -682,7 +680,7 @@ function FactRow({ fact, fileNames }: { fact: Fact; fileNames?: Map<number, stri
         ))}
 
         {fact.entities.length ? (
-          <span className="ml-1 font-mono text-[11px] text-muted-foreground">
+          <span className="ml-1 font-mono text-xs text-muted-foreground">
             {fact.entities.join(", ")}
           </span>
         ) : null}
@@ -725,13 +723,13 @@ function RunSettingRow({
   }
 
   return (
-    <label className="flex items-center gap-2 text-[11px]">
+    <label className="flex items-center gap-2 text-xs">
       <span className="min-w-0 flex-1 truncate text-muted-foreground">
         {t(`promptBlock.field.${setting.field}` as never)}
       </span>
       <input
         type="number"
-        className="h-6 w-24 rounded border border-border bg-background px-1.5 text-right text-[11px] disabled:opacity-60"
+        className="h-11 w-24 rounded border border-border bg-background px-1.5 text-right text-xs disabled:opacity-60"
         value={draft}
         disabled={!setting.editable || saving}
         placeholder={t("promptPreviewUnset")}
@@ -1138,9 +1136,7 @@ function PromptPreviewDialog({
           <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
             {!preview.skipped_reason ? (
               <>
-                <span className="rounded bg-muted px-2 py-0.5 font-mono text-[11px]">
-                  {operation}
-                </span>
+                <span className="rounded bg-muted px-2 py-0.5 font-mono text-xs">{operation}</span>
                 <span>·</span>
                 <span>{t("promptPreviewMessageCount", { count: preview.messages.length })}</span>
                 <span>·</span>

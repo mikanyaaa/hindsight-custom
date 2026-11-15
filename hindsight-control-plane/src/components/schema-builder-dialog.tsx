@@ -47,7 +47,7 @@ function TypeSelect({
 }) {
   return (
     <Select value={value} onValueChange={(v) => onChange(v as SchemaFieldType)}>
-      <SelectTrigger className="w-28 h-8">
+      <SelectTrigger className="w-28 h-11">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -127,7 +127,7 @@ function FieldRows({
               value={field.name}
               onChange={(e) => update(i, { name: e.target.value })}
               placeholder={t("namePlaceholder")}
-              className="flex-1 h-8"
+              className="flex-1 h-11"
             />
             <TypeSelect
               value={field.node.type}
@@ -143,7 +143,7 @@ function FieldRows({
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 shrink-0"
+              className="h-11 w-11 shrink-0"
               onClick={() => remove(i)}
               aria-label={t("removeField")}
             >
@@ -154,7 +154,7 @@ function FieldRows({
             value={field.description}
             onChange={(e) => update(i, { description: e.target.value })}
             placeholder={t("descriptionPlaceholder")}
-            className="h-8 text-xs"
+            className="h-11 text-xs"
           />
           <NodeChildren node={field.node} onChange={(node) => update(i, { node })} />
         </div>

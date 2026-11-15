@@ -4,6 +4,8 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { client } from "@/lib/api";
 import { useBank } from "@/lib/bank-context";
+import { isPageFailure } from "@/custom/pages/failure";
+import { PageEmpty, PageError, PageLoading } from "@/custom/pages/status";
 import { Button } from "@/components/ui/button";
 import {
   ChevronLeft,
@@ -12,7 +14,6 @@ import {
   ChevronsRight,
   List,
   ScatterChart,
-  Users,
 } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import {
@@ -53,6 +54,7 @@ export function EntitiesView() {
   const { currentBank } = useBank();
   const [entities, setEntities] = useState<Entity[]>([]);
   const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [selectedEntity, setSelectedEntity] = useState<EntityDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   // Per-entity timeline: every memory linked to the entity (reverse lookup via
@@ -92,6 +94,7 @@ export function EntitiesView() {
     if (!currentBank) return;
 
     setLoading(true);
+    setFailed(false);
     try {
       const pageOffset = (page - 1) * ITEMS_PER_PAGE;
       const result = await client.listEntities({
@@ -103,7 +106,7 @@ export function EntitiesView() {
       setEntities(result.items || []);
       setTotal(result.total || 0);
     } catch (error) {
-      // Error toast is shown automatically by the API client interceptor
+      if (isPageFailure(error)) setFailed(true);
     } finally {
       setLoading(false);
     }
@@ -303,7 +306,7 @@ export function EntitiesView() {
       </div>
 
       {viewMode === "relations" && (
-        <div className="bg-card border border-border border-solid rounded-[16px] overflow-hidden">
+        <div className="bg-card border border-border border-solid rounded-lg overflow-hidden">
           {graphLoading ? (
             <div className="flex items-center justify-center py-20">
               <div className="text-center">
@@ -347,12 +350,9 @@ export function EntitiesView() {
       {viewMode === "list" && (
         <div>
           {loading ? (
-            <div className="flex items-center justify-center py-20">
-              <div className="text-center">
-                <Spinner size="xl" variant="jump" className="mx-auto mb-2" />
-                <div className="text-sm text-muted-foreground">{t("loadingEntities")}</div>
-              </div>
-            </div>
+            <PageLoading label={t("loadingEntities")} />
+          ) : failed && entities.length === 0 ? (
+            <PageError onRetry={() => void loadEntities(currentPage)} />
           ) : entities.length > 0 ? (
             <>
               <div className="mb-4 text-sm text-muted-foreground">
@@ -407,7 +407,7 @@ export function EntitiesView() {
                       size="sm"
                       onClick={() => handlePageChange(1)}
                       disabled={currentPage === 1 || loading}
-                      className="h-7 w-7 p-0"
+                      className="h-11 w-11 p-0"
                     >
                       <ChevronsLeft className="h-3 w-3" />
                     </Button>
@@ -416,7 +416,7 @@ export function EntitiesView() {
                       size="sm"
                       onClick={() => handlePageChange(currentPage - 1)}
                       disabled={currentPage === 1 || loading}
-                      className="h-7 w-7 p-0"
+                      className="h-11 w-11 p-0"
                     >
                       <ChevronLeft className="h-3 w-3" />
                     </Button>
@@ -428,7 +428,7 @@ export function EntitiesView() {
                       size="sm"
                       onClick={() => handlePageChange(currentPage + 1)}
                       disabled={currentPage === totalPages || loading}
-                      className="h-7 w-7 p-0"
+                      className="h-11 w-11 p-0"
                     >
                       <ChevronRight className="h-3 w-3" />
                     </Button>
@@ -437,7 +437,7 @@ export function EntitiesView() {
                       size="sm"
                       onClick={() => handlePageChange(totalPages)}
                       disabled={currentPage === totalPages || loading}
-                      className="h-7 w-7 p-0"
+                      className="h-11 w-11 p-0"
                     >
                       <ChevronsRight className="h-3 w-3" />
                     </Button>
@@ -446,15 +446,7 @@ export function EntitiesView() {
               )}
             </>
           ) : (
-            <div className="flex items-center justify-center py-20">
-              <div className="text-center">
-                <Users className="w-10 h-10 mx-auto mb-3 text-muted-foreground/50" />
-                <div className="text-sm text-muted-foreground">{t("noEntitiesFound")}</div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  {t("noEntitiesDescription")}
-                </div>
-              </div>
-            </div>
+            <PageEmpty title={t("noEntitiesFound")} detail={t("noEntitiesDescription")} />
           )}
         </div>
       )}
@@ -478,7 +470,7 @@ export function EntitiesView() {
                   setSelectedEntity(null);
                   setEntityMemories([]);
                 }}
-                className="h-8 w-8 p-0"
+                className="h-11 w-11 p-0"
               >
                 <span className="text-lg">x</span>
               </Button>

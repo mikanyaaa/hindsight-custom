@@ -182,7 +182,7 @@ export function TagFilterInput({
             onFocus={() => setOpen(true)}
             onKeyDown={handleKeyDown}
             placeholder={resolvedPlaceholder}
-            className="pl-8 h-9"
+            className="pl-8 h-11"
           />
           {open && suggestions.length > 0 && (
             <div className="absolute z-20 mt-1 w-full bg-popover border border-border rounded-md shadow-md max-h-60 overflow-y-auto">
@@ -262,7 +262,7 @@ function MatchToggle({
 }) {
   const t = useTranslations("common");
   return (
-    <div className="flex items-center gap-1 bg-muted rounded-md p-0.5 h-9 shrink-0">
+    <div className="flex items-center gap-1 bg-muted rounded-md p-0.5 h-11 shrink-0">
       {(["any", "all"] as const).map((mode) => (
         <button
           key={mode}

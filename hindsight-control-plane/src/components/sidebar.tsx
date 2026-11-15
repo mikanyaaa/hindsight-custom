@@ -59,7 +59,7 @@ export function SidebarMenuButton() {
     <button
       type="button"
       onClick={() => window.dispatchEvent(new Event(OPEN_NAV_EVENT))}
-      className="md:hidden inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+      className="md:hidden inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
       aria-label={t("openNavigation")}
       title={t("openNavigation")}
     >
@@ -239,7 +239,7 @@ export function Sidebar({ currentTab, onTabChange, drawer = true }: SidebarProps
                   {currentBankName || currentBank}
                 </DialogPrimitive.Title>
                 <DialogPrimitive.Close
-                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
                   aria-label={tCommon("close")}
                 >
                   <X className="h-5 w-5" />

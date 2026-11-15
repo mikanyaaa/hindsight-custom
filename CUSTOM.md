@@ -199,6 +199,11 @@ accent and chart colours. Its canvas reads them from
 four counts, the last seven days of memories grouped by tag, and mental
 models with their freshness beside a short memory map. A point on that map
 opens the memory. Asking from home opens recall with the question filled in.
+List pages share one loading panel, one empty panel and one error panel in
+`src/custom/pages/`. A failed load stays quiet while the session dialog or the
+timeout banner is showing, so an expired session reads as Sitzung abgelaufen
+and not as a second network error. Filter controls and icon buttons on those
+pages are 44px, and the remaining 10px and 11px type is 12px.
 
 With Playwright available, run `node tests/custom/theme/layering-browser.cjs` from
 `hindsight-control-plane/` for light/dark checks at 390, 768 and 1440px.

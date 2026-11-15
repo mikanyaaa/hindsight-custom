@@ -8,6 +8,8 @@ import { useSearchParams } from "next/navigation";
 import { client } from "@/lib/api";
 import { resolveTemporalWindow } from "@/lib/temporal-window";
 import { useBank } from "@/lib/bank-context";
+import { isPageFailure } from "@/custom/pages/failure";
+import { PageEmpty, PageError, PageLoading } from "@/custom/pages/status";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -32,7 +34,6 @@ import {
   ArrowDown,
   Calendar,
 } from "lucide-react";
-import { Spinner } from "@/components/ui/spinner";
 import JsonView from "react18-json-view";
 import "react18-json-view/src/style.css";
 import { MemoryDetailModal } from "./memory-detail-modal";
@@ -155,6 +156,7 @@ export function SearchDebugView() {
   const [observations, setObservations] = useState<any[] | null>(null);
   const [trace, setTrace] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("results");
   const [selectedMemoryId, setSelectedMemoryId] = useState<string | null>(null);
   const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set());
@@ -253,6 +255,7 @@ export function SearchDebugView() {
     }
 
     setLoading(true);
+    setFailed(false);
 
     try {
       // Parse tags from comma-separated string
@@ -289,7 +292,7 @@ export function SearchDebugView() {
       setTrace(data.trace || null);
       setViewMode("results");
     } catch (error) {
-      // Error toast is shown automatically by the API client interceptor
+      if (isPageFailure(error)) setFailed(true);
     } finally {
       setLoading(false);
     }
@@ -383,7 +386,7 @@ export function SearchDebugView() {
                     type="number"
                     value={maxTokens}
                     onChange={(e) => setMaxTokens(parseInt(e.target.value))}
-                    className="h-8"
+                    className="h-11"
                   />
                 </Row>
                 <Row
@@ -396,7 +399,7 @@ export function SearchDebugView() {
                     type="datetime-local"
                     value={queryDate}
                     onChange={(e) => setQueryDate(e.target.value)}
-                    className="h-8"
+                    className="h-11"
                   />
                 </Row>
                 <Row label={t("chunks")} description={t("helpChunks")} htmlFor="recall-chunks">
@@ -444,12 +447,12 @@ export function SearchDebugView() {
                     value={tags}
                     onChange={(e) => setTags(e.target.value)}
                     placeholder={t("tagsPlaceholder")}
-                    className="h-8"
+                    className="h-11"
                   />
                 </Row>
                 <Row label={t("tagsMatchLabel")} description={t("helpTagsMatch")}>
                   <Select value={tagsMatch} onValueChange={(v) => setTagsMatch(v as TagsMatch)}>
-                    <SelectTrigger className="h-8">
+                    <SelectTrigger className="h-11">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -487,7 +490,7 @@ export function SearchDebugView() {
                       value={windowStart}
                       onChange={(e) => setWindowStart(e.target.value)}
                       aria-label={t("temporalWindowStart")}
-                      className="h-8 flex-1"
+                      className="h-11 flex-1"
                     />
                     <span className="text-xs text-muted-foreground">{t("temporalWindowTo")}</span>
                     <Input
@@ -495,7 +498,7 @@ export function SearchDebugView() {
                       value={windowEnd}
                       onChange={(e) => setWindowEnd(e.target.value)}
                       aria-label={t("temporalWindowEnd")}
-                      className="h-8 flex-1"
+                      className="h-11 flex-1"
                     />
                   </div>
                 </div>
@@ -511,14 +514,7 @@ export function SearchDebugView() {
       </Card>
 
       {/* Results */}
-      {loading && (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <Spinner size="lg" variant="jump" className="mb-4" />
-            <p className="text-muted-foreground">{t("searchingMemories")}</p>
-          </CardContent>
-        </Card>
-      )}
+      {loading && <PageLoading label={t("searchingMemories")} />}
 
       {!loading && results && (
         <div className="space-y-4">
@@ -697,7 +693,7 @@ export function SearchDebugView() {
                                     onClick={(e) => e.stopPropagation()}
                                     role="presentation"
                                   >
-                                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                    <div className="text-xs uppercase tracking-wide text-muted-foreground">
                                       {t("factAttachments")}
                                     </div>
                                     <AttachmentStrip
@@ -824,7 +820,7 @@ export function SearchDebugView() {
                                       {methods.map((m: any, mIdx: number) => (
                                         <span
                                           key={mIdx}
-                                          className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground capitalize"
+                                          className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground capitalize"
                                         >
                                           {m.method_name}: {m.results?.length || 0}
                                         </span>
@@ -835,7 +831,7 @@ export function SearchDebugView() {
                                     <div className="text-2xl font-bold text-foreground">
                                       {totalResults}
                                     </div>
-                                    <div className="text-[10px] text-muted-foreground">
+                                    <div className="text-xs text-muted-foreground">
                                       {totalDuration.toFixed(2)}s
                                     </div>
                                   </div>
@@ -886,7 +882,7 @@ export function SearchDebugView() {
                                                   {/* Show temporal range inline */}
                                                   {method.method_name === "temporal" &&
                                                     method.metadata?.constraint && (
-                                                      <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                                                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
                                                         <Calendar className="h-3 w-3" />
                                                         {method.metadata.constraint.start
                                                           ? new Date(
@@ -912,7 +908,7 @@ export function SearchDebugView() {
                                                 <div className="text-2xl font-bold text-foreground">
                                                   {methodResults.length}
                                                 </div>
-                                                <div className="text-[10px] text-muted-foreground">
+                                                <div className="text-xs text-muted-foreground">
                                                   {method.duration_seconds?.toFixed(2)}s
                                                 </div>
                                               </div>
@@ -942,7 +938,7 @@ export function SearchDebugView() {
                                                         }}
                                                       >
                                                         <div className="flex items-start gap-2">
-                                                          <span className="text-[10px] font-mono text-muted-foreground mt-0.5">
+                                                          <span className="text-xs font-mono text-muted-foreground mt-0.5">
                                                             {rIdx + 1}
                                                           </span>
                                                           <div className="flex-1 min-w-0">
@@ -950,7 +946,7 @@ export function SearchDebugView() {
                                                               {r.text}
                                                             </p>
                                                             <div className="flex items-center gap-2 mt-1">
-                                                              <span className="text-[10px] text-muted-foreground">
+                                                              <span className="text-xs text-muted-foreground">
                                                                 {fmtScore(r.score ?? r.similarity)}
                                                               </span>
                                                             </div>
@@ -960,7 +956,7 @@ export function SearchDebugView() {
                                                     ))}
                                                     {hasMore && (
                                                       <button
-                                                        className="w-full text-[10px] text-primary hover:text-primary/80 py-1.5 hover:bg-muted/50 rounded transition-colors"
+                                                        className="w-full text-xs text-primary hover:text-primary/80 py-1.5 hover:bg-muted/50 rounded transition-colors"
                                                         onClick={(e) => {
                                                           e.stopPropagation();
                                                           toggleExpandResults(resultsKey);
@@ -1211,7 +1207,7 @@ export function SearchDebugView() {
                                         <p className="text-sm text-foreground line-clamp-2">
                                           {r.text}
                                         </p>
-                                        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-[10px] text-muted-foreground font-mono">
+                                        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs text-muted-foreground font-mono">
                                           <span className="font-semibold text-foreground">
                                             = {fmtScore(r.rerank_score ?? r.score)}
                                           </span>
@@ -1324,16 +1320,10 @@ export function SearchDebugView() {
       )}
 
       {/* Empty State */}
-      {!loading && !results && (
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <Search className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">{t("readyToRecall")}</h3>
-            <p className="text-muted-foreground text-center max-w-md">
-              {t("readyToRecallDescription")}
-            </p>
-          </CardContent>
-        </Card>
+      {!loading && failed && !results && <PageError onRetry={() => void runSearch()} />}
+
+      {!loading && !failed && !results && (
+        <PageEmpty title={t("readyToRecall")} detail={t("readyToRecallDescription")} />
       )}
 
       {/* The same dialog every other view opens a memory in. It was a fixed

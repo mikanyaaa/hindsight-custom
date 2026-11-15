@@ -311,7 +311,7 @@ function BasedOnList({
           <div key={group.factType} className="rounded-lg border border-border/60 overflow-hidden">
             <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/40 border-b border-border/60">
               <span
-                className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${display.color}`}
+                className={`px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wide ${display.color}`}
               >
                 {display.label}
               </span>
@@ -542,7 +542,7 @@ function SideBySideDiff({ before, after }: { before: string; after: string }) {
 
   return (
     <div
-      className="grid grid-cols-2 divide-x divide-border border border-border rounded-md overflow-hidden text-[13px] font-mono"
+      className="grid grid-cols-2 divide-x divide-border border border-border rounded-md overflow-hidden text-sm font-mono"
       style={{ color: palette.body }}
     >
       <div>
@@ -671,7 +671,7 @@ function BasedOnDiff({
           <div key={group.factType} className="rounded-lg border border-border/60 overflow-hidden">
             <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/40 border-b border-border/60">
               <span
-                className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${display.color}`}
+                className={`px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wide ${display.color}`}
               >
                 {display.label}
               </span>
@@ -754,7 +754,7 @@ function MentalModelHistoryView({
           <Button
             variant="outline"
             size="sm"
-            className="h-7 w-7 p-0"
+            className="h-11 w-11 p-0"
             disabled={idx === history.length - 1}
             onClick={() => setIdx(idx + 1)}
           >
@@ -763,7 +763,7 @@ function MentalModelHistoryView({
           <Button
             variant="outline"
             size="sm"
-            className="h-7 w-7 p-0"
+            className="h-11 w-11 p-0"
             disabled={idx === 0}
             onClick={() => setIdx(idx - 1)}
           >
@@ -1003,7 +1003,7 @@ export function MentalModelDetailModal({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-7 w-7 p-0 shrink-0"
+                  className="h-11 w-11 p-0 shrink-0"
                   onClick={handleReload}
                   disabled={reloading}
                   title={t("reloadData")}
@@ -1079,7 +1079,7 @@ export function MentalModelDetailModal({
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-8 w-8 p-0 shrink-0"
+                      className="h-11 w-11 p-0 shrink-0"
                       disabled={refreshing}
                       aria-label={t("actionsAriaLabel")}
                     >

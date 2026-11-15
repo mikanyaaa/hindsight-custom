@@ -4,6 +4,8 @@ import { useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { client } from "@/lib/api";
 import { useBank } from "@/lib/bank-context";
+import { isPageFailure } from "@/custom/pages/failure";
+import { PageEmpty, PageError, PageLoading } from "@/custom/pages/status";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -64,6 +66,7 @@ export function ThinkView() {
   const [viewMode, setViewMode] = useState<ViewMode>("answer");
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [tags, setTags] = useState("");
   const [tagsMatch, setTagsMatch] = useState<TagsMatch>("any");
   const [factTypes, setFactTypes] = useState<FactType[]>([]);
@@ -153,6 +156,7 @@ export function ThinkView() {
     if (!currentBank || !query) return;
 
     setLoading(true);
+    setFailed(false);
     setViewMode("answer");
     try {
       // Parse tags from comma-separated string
@@ -186,7 +190,7 @@ export function ThinkView() {
       });
       setResult(data);
     } catch (error) {
-      // Error toast is shown automatically by the API client interceptor
+      if (isPageFailure(error)) setFailed(true);
     } finally {
       setLoading(false);
     }
@@ -269,7 +273,7 @@ export function ThinkView() {
                     type="number"
                     value={maxTokens}
                     onChange={(e) => setMaxTokens(parseInt(e.target.value) || 4096)}
-                    className="h-8"
+                    className="h-11"
                   />
                 </Row>
                 <Row
@@ -309,12 +313,12 @@ export function ThinkView() {
                     value={tags}
                     onChange={(e) => setTags(e.target.value)}
                     placeholder={t("tagsPlaceholder")}
-                    className="h-8"
+                    className="h-11"
                   />
                 </Row>
                 <Row label={t("tagsMatchLabel")} description={t("helpTagsMatch")}>
                   <Select value={tagsMatch} onValueChange={(v) => setTagsMatch(v as TagsMatch)}>
-                    <SelectTrigger className="h-8">
+                    <SelectTrigger className="h-11">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -350,7 +354,7 @@ export function ThinkView() {
                     value={excludeMentalModelIds}
                     onChange={(e) => setExcludeMentalModelIds(e.target.value)}
                     placeholder={t("excludeIdsPlaceholder")}
-                    className="h-8"
+                    className="h-11"
                   />
                 </Row>
               </Section>
@@ -360,14 +364,7 @@ export function ThinkView() {
       </Card>
 
       {/* Loading State */}
-      {loading && (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <Spinner size="lg" variant="jump" className="mb-4" />
-            <p className="text-muted-foreground">{t("reflectingOnMemories")}</p>
-          </CardContent>
-        </Card>
-      )}
+      {loading && <PageLoading label={t("reflectingOnMemories")} />}
 
       {/* Results */}
       {!loading && result && (
@@ -548,7 +545,7 @@ export function ThinkView() {
                           <div className="text-xs text-emerald-700 dark:text-emerald-300 mt-1">
                             {obs.description}
                           </div>
-                          <div className="text-[10px] text-muted-foreground mt-2 font-mono">
+                          <div className="text-xs text-muted-foreground mt-2 font-mono">
                             ID: {obs.id}
                           </div>
                         </div>
@@ -658,7 +655,7 @@ export function ThinkView() {
                                     {item.isFinal ? (
                                       <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
                                     ) : (
-                                      <span className="text-[10px] font-semibold">
+                                      <span className="text-xs font-semibold">
                                         {item.iteration}
                                       </span>
                                     )}
@@ -708,7 +705,7 @@ export function ThinkView() {
                                         </div>
                                         <div className="p-2 space-y-2">
                                           <div>
-                                            <p className="text-[10px] font-semibold text-muted-foreground mb-1">
+                                            <p className="text-xs font-semibold text-muted-foreground mb-1">
                                               {t("toolInputLabel")}
                                             </p>
                                             <div className="bg-muted p-1.5 rounded text-xs overflow-auto max-h-32">
@@ -721,7 +718,7 @@ export function ThinkView() {
                                           </div>
                                           {tc.output && (
                                             <div>
-                                              <p className="text-[10px] font-semibold text-muted-foreground mb-1">
+                                              <p className="text-xs font-semibold text-muted-foreground mb-1">
                                                 {t("toolOutputLabel")}
                                               </p>
                                               <div className="bg-muted p-1.5 rounded text-xs overflow-auto max-h-32">
@@ -983,16 +980,10 @@ export function ThinkView() {
       )}
 
       {/* Empty State */}
-      {!loading && !result && (
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <Sparkles className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">{t("readyToReflect")}</h3>
-            <p className="text-muted-foreground text-center max-w-md">
-              {t("readyToReflectDescription")}
-            </p>
-          </CardContent>
-        </Card>
+      {!loading && failed && !result && <PageError onRetry={() => void runReflect()} />}
+
+      {!loading && !failed && !result && (
+        <PageEmpty title={t("readyToReflect")} detail={t("readyToReflectDescription")} />
       )}
 
       {/* Memory Detail Modal */}

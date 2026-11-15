@@ -195,7 +195,7 @@ export function DisclosureButton({
         {label}
       </span>
       {!open && badge ? (
-        <span className="rounded-full bg-primary/15 px-1.5 text-[10px] font-medium text-primary">
+        <span className="rounded-full bg-primary/15 px-1.5 text-xs font-medium text-primary">
           {badge}
         </span>
       ) : null}

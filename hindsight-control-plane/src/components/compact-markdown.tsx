@@ -41,7 +41,7 @@ export function CompactMarkdown({ children, className }: { children: string; cla
     <div
       className={cn(
         // This renderer owns its compact styles, even inside a prose container.
-        "not-prose text-[13px] leading-6 text-foreground/90 space-y-2 [&>:first-child]:mt-0",
+        "not-prose text-sm leading-6 text-foreground/90 space-y-2 [&>:first-child]:mt-0",
         className
       )}
     >
@@ -50,25 +50,25 @@ export function CompactMarkdown({ children, className }: { children: string; cla
         components={{
           h1: (props) => (
             <div
-              className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mt-4 mb-1"
+              className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mt-4 mb-1"
               {...props}
             />
           ),
           h2: (props) => (
             <div
-              className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mt-4 mb-1"
+              className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mt-4 mb-1"
               {...props}
             />
           ),
           h3: (props) => (
             <div
-              className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mt-3 mb-1"
+              className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mt-3 mb-1"
               {...props}
             />
           ),
           h4: (props) => (
             <div
-              className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mt-3 mb-1"
+              className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mt-3 mb-1"
               {...props}
             />
           ),
@@ -78,12 +78,12 @@ export function CompactMarkdown({ children, className }: { children: string; cla
           li: (props) => <li className="leading-6" {...props} />,
           strong: (props) => <strong className="font-semibold text-foreground" {...props} />,
           code: (props) => (
-            <code className="text-[12px] font-mono bg-muted/70 px-1 py-0.5 rounded" {...props} />
+            <code className="text-xs font-mono bg-muted/70 px-1 py-0.5 rounded" {...props} />
           ),
           a: (props) => <a className="text-primary underline" {...props} />,
           table: (props) => (
             <div className="overflow-x-auto my-3 rounded-md border border-border">
-              <table className="text-[12px] w-full border-collapse" {...props} />
+              <table className="text-xs w-full border-collapse" {...props} />
             </div>
           ),
           thead: (props) => <thead className="bg-muted/60" {...props} />,

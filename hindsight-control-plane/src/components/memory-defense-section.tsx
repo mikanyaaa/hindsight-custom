@@ -323,7 +323,7 @@ function SubSection({
           <div className="flex items-baseline gap-2 flex-wrap">
             <p className="text-sm font-semibold">{title}</p>
             {headerSummary && (
-              <span className="text-[10px] font-bold tracking-[0.1em] text-primary uppercase px-1.5 py-0.5 rounded bg-primary/10">
+              <span className="text-xs font-bold tracking-[0.1em] text-primary uppercase px-1.5 py-0.5 rounded bg-primary/10">
                 {headerSummary}
               </span>
             )}

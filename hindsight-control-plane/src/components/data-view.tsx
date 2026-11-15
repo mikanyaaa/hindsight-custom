@@ -13,6 +13,8 @@ import {
   storeGraph,
 } from "@/lib/graph-cache";
 import { useBank } from "@/lib/bank-context";
+import { isPageFailure } from "@/custom/pages/failure";
+import { PageEmpty, PageError, PageLoading } from "@/custom/pages/status";
 import {
   AppliedMemoryFilters,
   hasActiveMemoryFilters,
@@ -70,7 +72,7 @@ const MemoryConstellation = BRAIN_ENABLED
 // CUSTOM-HOOK: brain-network-entry end
 import { TagFilterInput } from "./tag-filter-input";
 import { ObservationScopeFilter, ObservationScope } from "./observation-scope-filter";
-import { ScatterChart, Plus, FileText } from "lucide-react";
+import { ScatterChart, Plus } from "lucide-react";
 
 type FactType = "world" | "experience" | "observation";
 type ViewMode = "table" | "timeline" | "constellation";
@@ -166,6 +168,7 @@ export function DataView({
       null
   );
   const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [tagFilters, setTagFilters] = useState<string[]>([]);
   // The filters that actually produced the `data` currently on screen. This
@@ -281,6 +284,7 @@ export function DataView({
     const hit = force ? undefined : cachedGraph(params);
     if (hit) {
       setData(hit.data);
+      setFailed(false);
       setAppliedFilters(applied);
       if (isFresh(hit)) {
         readRef.current?.abort();
@@ -295,7 +299,10 @@ export function DataView({
     readRef.current?.abort();
     const read = new AbortController();
     readRef.current = read;
-    if (!silent) setLoading(true);
+    if (!silent) {
+      setLoading(true);
+      setFailed(false);
+    }
     try {
       const graphData: any = await fetchGraph(params, read.signal);
       if (read.signal.aborted) return;
@@ -303,6 +310,7 @@ export function DataView({
       // A background refresh that found nothing new keeps the old object, so the
       // constellation doesn't lay itself out again for the same memories.
       setData((prev: unknown) => (sameGraph(prev, graphData) ? prev : graphData));
+      setFailed(false);
       setAppliedFilters(applied);
       loadConsolidationStatus();
       // The sibling tabs are one click away and each read is slow on a big
@@ -317,7 +325,8 @@ export function DataView({
         );
       }
     } catch (error) {
-      // Error toast is shown automatically by the API client interceptor
+      if (read.signal.aborted) return;
+      if (readRef.current === read && isPageFailure(error)) setFailed(true);
     } finally {
       if (readRef.current === read) {
         readRef.current = null;
@@ -624,17 +633,20 @@ export function DataView({
   return (
     <div>
       {loading && !data ? (
-        <div className="text-center py-12">
-          <Spinner size="lg" variant="jump" className="mx-auto mb-3" />
-          <p className="text-muted-foreground">{t("loadingMemories")}</p>
-        </div>
+        <PageLoading label={t("loadingMemories")} />
+      ) : failed && !data ? (
+        <PageError
+          onRetry={() => {
+            const { tags, match } = resolveTagQuery();
+            void loadData(undefined, searchQuery || undefined, tags, match, false, true);
+          }}
+        />
       ) : data && shouldShowEmptyBankState(data.total_units, appliedFilters) ? (
-        <div className="text-center py-20">
-          <FileText className="w-10 h-10 mx-auto mb-4 text-muted-foreground/50" />
-          <h3 className="text-base font-medium text-foreground mb-1">{t("noMemoriesYet")}</h3>
-          {!documentId && !chunkId && (
-            <>
-              <p className="text-sm text-muted-foreground mb-6">{t("noMemoriesDescription")}</p>
+        <PageEmpty
+          title={t("noMemoriesYet")}
+          detail={!documentId && !chunkId ? t("noMemoriesDescription") : undefined}
+          action={
+            !documentId && !chunkId ? (
               <Button
                 variant="default"
                 size="sm"
@@ -647,9 +659,9 @@ export function DataView({
                 <Plus className="w-4 h-4" />
                 {tAddDoc("addDocumentButton")}
               </Button>
-            </>
-          )}
-        </div>
+            ) : undefined
+          }
+        />
       ) : data ? (
         <>
           {/* Always visible filters */}
@@ -688,7 +700,7 @@ export function DataView({
                       }
                     }}
                     placeholder={t("filterByTextPlaceholder")}
-                    className="pl-8 h-9"
+                    className="pl-8 h-11"
                   />
                 </div>
                 {/* Tag input. Setting a tag filter clears any selected scope
@@ -730,7 +742,7 @@ export function DataView({
                     setCompactMode(false);
                   }
                 }}
-                className="h-6 px-2 text-xs gap-1"
+                className="h-11 px-2 text-xs gap-1"
               >
                 <Settings2 className="w-3 h-3" />
                 Expand
@@ -900,7 +912,7 @@ export function DataView({
                         value={recencyBasis}
                         onValueChange={(v) => setRecencyBasis(v as RecencyBasis)}
                       >
-                        <SelectTrigger className="h-8 w-44 text-xs">
+                        <SelectTrigger className="h-11 w-44 text-xs">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -1110,7 +1122,7 @@ export function DataView({
                                               <EntityChip key={i} entity={entity} size="xs" />
                                             ))}
                                           {row.entities.split(", ").length > 2 && (
-                                            <span className="text-[10px] text-muted-foreground">
+                                            <span className="text-xs text-muted-foreground">
                                               +{row.entities.split(", ").length - 2}
                                             </span>
                                           )}
@@ -1128,7 +1140,7 @@ export function DataView({
                                               <TagChip key={i} tag={tag} size="xs" />
                                             ))}
                                           {row.tags.length > 2 && (
-                                            <span className="text-[10px] text-muted-foreground">
+                                            <span className="text-xs text-muted-foreground">
                                               +{row.tags.length - 2}
                                             </span>
                                           )}
@@ -1171,7 +1183,7 @@ export function DataView({
                                   size="sm"
                                   onClick={() => setCurrentPage(1)}
                                   disabled={currentPage === 1}
-                                  className="h-7 w-7 p-0"
+                                  className="h-11 w-11 p-0"
                                 >
                                   <ChevronsLeft className="h-3 w-3" />
                                 </Button>
@@ -1180,7 +1192,7 @@ export function DataView({
                                   size="sm"
                                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                                   disabled={currentPage === 1}
-                                  className="h-7 w-7 p-0"
+                                  className="h-11 w-11 p-0"
                                 >
                                   <ChevronLeft className="h-3 w-3" />
                                 </Button>
@@ -1192,7 +1204,7 @@ export function DataView({
                                   size="sm"
                                   onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                                   disabled={currentPage === totalPages}
-                                  className="h-7 w-7 p-0"
+                                  className="h-11 w-11 p-0"
                                 >
                                   <ChevronRight className="h-3 w-3" />
                                 </Button>
@@ -1201,7 +1213,7 @@ export function DataView({
                                   size="sm"
                                   onClick={() => setCurrentPage(totalPages)}
                                   disabled={currentPage === totalPages}
-                                  className="h-7 w-7 p-0"
+                                  className="h-11 w-11 p-0"
                                 >
                                   <ChevronsRight className="h-3 w-3" />
                                 </Button>
@@ -1212,9 +1224,9 @@ export function DataView({
                       );
                     })()
                   ) : (
-                    <div className="text-center py-12 text-muted-foreground">
-                      {filtersActive ? t("noMemoriesMatchFilter") : t("noMemoriesFound")}
-                    </div>
+                    <PageEmpty
+                      title={filtersActive ? t("noMemoriesMatchFilter") : t("noMemoriesFound")}
+                    />
                   )}
                 </div>
               </div>
@@ -1460,7 +1472,7 @@ export function TimelineView({
                 setNewestFirst((v) => !v);
                 setCurrentIndex(0);
               }}
-              className="h-7 px-2 mr-2 text-[10px] gap-1"
+              className="h-7 px-2 mr-2 text-xs gap-1"
               title={newestFirst ? t("sortNewestFirst") : t("sortOldestFirst")}
             >
               {newestFirst ? (
@@ -1478,12 +1490,12 @@ export function TimelineView({
                 size="sm"
                 onClick={zoomOut}
                 disabled={granularity === "year"}
-                className="h-7 w-7 p-0"
+                className="h-11 w-11 p-0"
                 title={t("zoomOut")}
               >
                 <ZoomOut className="h-3 w-3" />
               </Button>
-              <span className="text-[10px] px-2 min-w-[50px] text-center border-x border-border text-foreground">
+              <span className="text-xs px-2 min-w-[50px] text-center border-x border-border text-foreground">
                 {granularityLabels[granularity]}
               </span>
               <Button
@@ -1491,7 +1503,7 @@ export function TimelineView({
                 size="sm"
                 onClick={zoomIn}
                 disabled={granularity === "day"}
-                className="h-7 w-7 p-0"
+                className="h-11 w-11 p-0"
                 title={t("zoomIn")}
               >
                 <ZoomIn className="h-3 w-3" />
@@ -1505,7 +1517,7 @@ export function TimelineView({
                 size="sm"
                 onClick={() => scrollToGroup(0)}
                 disabled={timelineGroups.length <= 1}
-                className="h-7 w-7 p-0"
+                className="h-11 w-11 p-0"
                 title={t("first")}
               >
                 <ChevronsLeft className="h-3 w-3" />
@@ -1515,12 +1527,12 @@ export function TimelineView({
                 size="sm"
                 onClick={() => scrollToGroup(currentIndex - 1)}
                 disabled={currentIndex === 0}
-                className="h-7 w-7 p-0"
+                className="h-11 w-11 p-0"
                 title={t("previous")}
               >
                 <ChevronLeft className="h-3 w-3" />
               </Button>
-              <span className="text-[10px] px-2 min-w-[60px] text-center border-x border-border text-foreground">
+              <span className="text-xs px-2 min-w-[60px] text-center border-x border-border text-foreground">
                 {currentIndex + 1} / {timelineGroups.length}
               </span>
               <Button
@@ -1528,7 +1540,7 @@ export function TimelineView({
                 size="sm"
                 onClick={() => scrollToGroup(currentIndex + 1)}
                 disabled={currentIndex >= timelineGroups.length - 1}
-                className="h-7 w-7 p-0"
+                className="h-11 w-11 p-0"
                 title={t("next")}
               >
                 <ChevronRight className="h-3 w-3" />
@@ -1538,7 +1550,7 @@ export function TimelineView({
                 size="sm"
                 onClick={() => scrollToGroup(timelineGroups.length - 1)}
                 disabled={timelineGroups.length <= 1}
-                className="h-7 w-7 p-0"
+                className="h-11 w-11 p-0"
                 title={t("last")}
               >
                 <ChevronsRight className="h-3 w-3" />
@@ -1562,7 +1574,7 @@ export function TimelineView({
                   <span className="text-xs font-semibold text-primary">{group.label}</span>
                 </div>
                 <div className="w-2 h-2 rounded-full bg-primary z-10" />
-                <span className="ml-2 text-[10px] text-muted-foreground">
+                <span className="ml-2 text-xs text-muted-foreground">
                   {group.items.length}{" "}
                   {group.items.length === 1 ? t("timelineItem") : t("timelineItems")}
                 </span>
@@ -1578,10 +1590,10 @@ export function TimelineView({
                   >
                     {/* Date & Time */}
                     <div className="w-[60px] text-right pr-3 pt-1 flex-shrink-0">
-                      <div className="text-[10px] text-muted-foreground">
+                      <div className="text-xs text-muted-foreground">
                         {formatDateTime(item.occurred_start).date}
                       </div>
-                      <div className="text-[9px] text-muted-foreground/70">
+                      <div className="text-xs text-muted-foreground/70">
                         {formatDateTime(item.occurred_start).time}
                       </div>
                     </div>
@@ -1601,7 +1613,7 @@ export function TimelineView({
                         {item.text}
                       </p>
                       {item.context && (
-                        <p className="text-[10px] text-muted-foreground mt-1 truncate">
+                        <p className="text-xs text-muted-foreground mt-1 truncate">
                           {item.context}
                         </p>
                       )}
@@ -1614,7 +1626,7 @@ export function TimelineView({
                               <EntityChip key={i} entity={entity} size="xs" />
                             ))}
                           {item.entities.split(", ").length > 3 && (
-                            <span className="text-[9px] text-muted-foreground">
+                            <span className="text-xs text-muted-foreground">
                               +{item.entities.split(", ").length - 3}
                             </span>
                           )}

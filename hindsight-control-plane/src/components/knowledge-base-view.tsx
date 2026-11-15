@@ -8,6 +8,8 @@ import { useVisiblePoll } from "@/custom/perf/use-visible-poll";
 // CUSTOM-HOOK: visible-poll-knowledge end
 import { client, type KnowledgeNode, type KnowledgeTagFilter, type MentalModel } from "@/lib/api";
 import { useBank } from "@/lib/bank-context";
+import { isPageFailure } from "@/custom/pages/failure";
+import { PageEmpty, PageError, PageLoading } from "@/custom/pages/status";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -115,6 +117,7 @@ export function KnowledgeBaseView() {
   // request its page / mental model ids under the new bank (#3807).
   const [tree, setTree] = useState<{ bank: string; roots: KnowledgeNode[] } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
   // Only the tree fetched for the bank on screen counts; while a switch is in
   // flight there is no tree, which parks the selection effects below.
   const treeLoaded = tree !== null && tree.bank === currentBank;
@@ -199,13 +202,16 @@ export function KnowledgeBaseView() {
       if (!currentBank) return;
       const bank = currentBank;
       treeRequestBankRef.current = bank;
-      if (!opts?.silent) setLoading(true);
+      if (!opts?.silent) {
+        setLoading(true);
+        setFailed(false);
+      }
       let nextRoots: KnowledgeNode[] = [];
       try {
         const result = await client.getKnowledgeTree(bank, tagFilter);
         nextRoots = result.roots || [];
-      } catch {
-        // toast handled by interceptor
+      } catch (error) {
+        if (!opts?.silent && isPageFailure(error)) setFailed(true);
       } finally {
         if (!opts?.silent) setLoading(false);
       }
@@ -615,9 +621,7 @@ export function KnowledgeBaseView() {
                   <Spinner size="md" variant="jump" />
                 </div>
               ) : results.length === 0 ? (
-                <p className="px-3 py-6 text-sm text-muted-foreground text-center">
-                  {t("searchEmpty")}
-                </p>
+                <PageEmpty title={t("searchEmpty")} />
               ) : (
                 <ul className="py-1">
                   {results.map((r, i) => (
@@ -634,9 +638,9 @@ export function KnowledgeBaseView() {
                 </ul>
               )
             ) : loading ? (
-              <div className="flex items-center justify-center py-16">
-                <Spinner size="md" variant="jump" />
-              </div>
+              <PageLoading />
+            ) : failed ? (
+              <PageError onRetry={() => void loadTree()} />
             ) : (
               <ul className="py-2">
                 <TreeRow
@@ -1133,7 +1137,7 @@ export function TreeRow({
               {node.tags.map((tag) => (
                 <span
                   key={tag}
-                  className="rounded-full bg-muted-foreground/10 px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground"
+                  className="rounded-full bg-muted-foreground/10 px-1.5 py-0.5 text-xs leading-none text-muted-foreground"
                 >
                   {tag}
                 </span>

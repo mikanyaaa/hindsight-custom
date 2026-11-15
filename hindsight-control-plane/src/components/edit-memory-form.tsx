@@ -80,7 +80,7 @@ export function EditMemoryForm({ memory, busy, onCancel, onSave }: EditMemoryFor
   return (
     <div className="space-y-3">
       <div>
-        <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {t("sectionFullText")}
         </label>
         <textarea
@@ -93,7 +93,7 @@ export function EditMemoryForm({ memory, busy, onCancel, onSave }: EditMemoryFor
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             {t("editFieldType")}
           </label>
           <div className="mt-1 flex items-center gap-1 bg-muted rounded-lg p-1 w-fit">
@@ -115,54 +115,54 @@ export function EditMemoryForm({ memory, busy, onCancel, onSave }: EditMemoryFor
         </div>
         <div className="grid grid-cols-3 gap-2">
           <div>
-            <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               {t("editFieldOccurredStart")}
             </label>
             <Input
               type="date"
               value={occurredStart}
               onChange={(e) => setOccurredStart(e.target.value)}
-              className="mt-1 h-8 text-sm"
+              className="mt-1 h-11 text-sm"
             />
           </div>
           <div>
-            <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               {t("editFieldOccurredEnd")}
             </label>
             <Input
               type="date"
               value={occurredEnd}
               onChange={(e) => setOccurredEnd(e.target.value)}
-              className="mt-1 h-8 text-sm"
+              className="mt-1 h-11 text-sm"
             />
           </div>
           <div>
-            <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               {t("editFieldMentionedAt")}
             </label>
             <Input
               type="date"
               value={mentionedAt}
               onChange={(e) => setMentionedAt(e.target.value)}
-              className="mt-1 h-8 text-sm"
+              className="mt-1 h-11 text-sm"
             />
           </div>
         </div>
       </div>
 
       <div>
-        <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {t("editFieldContext")}
         </label>
         <Input
           value={context}
           onChange={(e) => setContext(e.target.value)}
-          className="mt-1 h-8 text-sm"
+          className="mt-1 h-11 text-sm"
         />
       </div>
 
       <div>
-        <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {t("editFieldEntities")}
         </label>
         <div className="mt-1 flex flex-wrap items-center gap-1.5 p-2 bg-muted/50 rounded-lg border border-border min-h-[2.5rem]">

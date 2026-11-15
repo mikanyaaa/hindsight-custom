@@ -14,6 +14,8 @@ import {
   resolveDateRangePreset,
 } from "@/lib/date-range-preset";
 import { useBank } from "@/lib/bank-context";
+import { isPageFailure } from "@/custom/pages/failure";
+import { PageEmpty, PageError, PageLoading } from "@/custom/pages/status";
 import { useFeatures } from "@/lib/features-context";
 import { DataView } from "./data-view";
 import { TraceDialog } from "./llm-requests-view";
@@ -250,7 +252,7 @@ function TagsAndMetadataCell({
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground mb-1">
+    <div className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground mb-1">
       {children}
     </div>
   );
@@ -428,7 +430,7 @@ function MemoryComposition({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em]">
+        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-[0.08em]">
           {t("memoryComposition")}
         </h4>
         <span className="text-xs text-muted-foreground tabular-nums">{total.toLocaleString()}</span>
@@ -454,7 +456,7 @@ function MemoryComposition({
               <div key={d.name} className="space-y-0.5">
                 <div className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-[2px]" style={{ backgroundColor: d.color }} />
-                  <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
+                  <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
                     {d.name}
                   </span>
                 </div>
@@ -462,7 +464,7 @@ function MemoryComposition({
                   <span className="text-base font-semibold tabular-nums">
                     {d.value.toLocaleString()}
                   </span>
-                  <span className="text-[10px] text-muted-foreground tabular-nums">
+                  <span className="text-xs text-muted-foreground tabular-nums">
                     {total > 0 ? `${((d.value / total) * 100).toFixed(0)}%` : "0%"}
                   </span>
                 </div>
@@ -490,7 +492,7 @@ function ChunkMemoriesHeader({
         <button
           key={ft}
           onClick={() => setChunkFactType(ft)}
-          className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+          className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
             chunkFactType === ft
               ? "bg-background text-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground"
@@ -553,7 +555,7 @@ function InvalidatedFactsSection({ bankId, documentId }: { bankId: string; docum
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 {row.fact_type && (
-                  <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium capitalize">
+                  <span className="shrink-0 text-xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium capitalize">
                     {row.fact_type}
                   </span>
                 )}
@@ -568,7 +570,7 @@ function InvalidatedFactsSection({ bankId, documentId }: { bankId: string; docum
                     .map((e: string, i: number) => (
                       <span
                         key={i}
-                        className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground"
+                        className="text-xs px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground"
                       >
                         {e}
                       </span>
@@ -632,7 +634,7 @@ function ChunkRow({ chunk, bankId }: { chunk: any; bankId: string }) {
         <span className="text-xs font-mono text-muted-foreground shrink-0">
           #{chunk.chunk_index}
         </span>
-        <span className="text-[11px] text-muted-foreground/60 shrink-0">
+        <span className="text-xs text-muted-foreground/60 shrink-0">
           {text.length.toLocaleString()} chars
         </span>
         {!expanded && <span className="text-xs text-foreground/50 truncate">{preview}</span>}
@@ -651,7 +653,7 @@ function ChunkRow({ chunk, bankId }: { chunk: any; bankId: string }) {
                 variant="ghost"
                 size="sm"
                 onClick={() => setMemoriesExpanded(false)}
-                className="h-6 px-2 text-xs gap-1"
+                className="h-11 px-2 text-xs gap-1"
               >
                 <Eye className="w-3 h-3" />
                 Compact
@@ -673,7 +675,7 @@ function ChunkRow({ chunk, bankId }: { chunk: any; bankId: string }) {
                 text={text}
                 bankId={bankId}
                 attachments={chunk.attachments}
-                className="px-4 py-3 text-[11px] leading-5 text-foreground/80 whitespace-pre-wrap font-mono"
+                className="px-4 py-3 text-xs leading-5 text-foreground/80 whitespace-pre-wrap font-mono"
               />
             </div>
             <div className="flex flex-col overflow-hidden">
@@ -713,6 +715,7 @@ export function DocumentsView() {
   // Document IDs targeted by a pending/processing retain op → badged as "updating".
   const [inFlightDocIds, setInFlightDocIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
   // Whether the first document fetch has completed. The mount fetch is debounced
   // (see the load effect), so without this the empty state ("No documents found")
   // flashes for the initial paint + debounce window before `loading` ever flips.
@@ -799,6 +802,7 @@ export function DocumentsView() {
       if (!currentBank) return;
 
       setLoading(true);
+      setFailed(false);
       try {
         const pageOffset = (page - 1) * ITEMS_PER_PAGE;
         // Not named `window`: this file reaches for the global elsewhere
@@ -825,7 +829,8 @@ export function DocumentsView() {
         setTotal(data.total || 0);
         setTotalIsEstimate(Boolean(data.total_is_estimate));
       } catch (error) {
-        // Error toast is shown automatically by the API client interceptor
+        // The session dialog and the timeout banner own those failures.
+        if (isPageFailure(error)) setFailed(true);
       } finally {
         setLoading(false);
         setLoaded(true);
@@ -1327,7 +1332,7 @@ export function DocumentsView() {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8 shrink-0"
+                className="h-11 shrink-0"
                 disabled={!currentBank || exporting || importing}
               >
                 {exporting ? t("exporting") : importing ? t("importing") : t("actionsButton")}
@@ -1446,7 +1451,7 @@ export function DocumentsView() {
                 onValueChange={(v) => setImportOnConflict(v as "skip" | "replace" | "new-id")}
                 disabled={importing}
               >
-                <SelectTrigger id="import-on-conflict" className="h-8">
+                <SelectTrigger id="import-on-conflict" className="h-11">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1492,7 +1497,7 @@ export function DocumentsView() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t("searchPlaceholder")}
-            className="pl-8 pr-8 h-9"
+            className="pl-8 pr-8 h-11"
           />
           {searchQuery && (
             <button
@@ -1527,7 +1532,7 @@ export function DocumentsView() {
             }
           }}
         >
-          <SelectTrigger className="w-[150px] h-9" aria-label={t("dateRangeAriaLabel")}>
+          <SelectTrigger className="w-[150px] h-11" aria-label={t("dateRangeAriaLabel")}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent position="popper">
@@ -1552,7 +1557,7 @@ export function DocumentsView() {
               type="datetime-local"
               value={customFrom}
               onChange={(e) => setCustomFrom(e.target.value)}
-              className="h-9 w-[240px]"
+              className="h-11 w-[240px]"
             />
             <label htmlFor="documents-range-to" className="text-xs text-muted-foreground">
               {t("dateRangeTo")}
@@ -1562,7 +1567,7 @@ export function DocumentsView() {
               type="datetime-local"
               value={customTo}
               onChange={(e) => setCustomTo(e.target.value)}
-              className="h-9 w-[240px]"
+              className="h-11 w-[240px]"
             />
             {/* A reversed range sends no bounds at all, so without this the list
                 would quietly show everything and look like the filter was ignored. */}
@@ -1580,7 +1585,7 @@ export function DocumentsView() {
             never drops rows — the re-sort is the whole of its effect.) */}
         {dateRange !== "all" && (
           <Select value={timeField} onValueChange={(v) => setTimeField(v as DocumentTimeField)}>
-            <SelectTrigger className="w-[150px] h-9" aria-label={t("timeFieldAriaLabel")}>
+            <SelectTrigger className="w-[150px] h-11" aria-label={t("timeFieldAriaLabel")}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent position="popper">
@@ -1594,7 +1599,7 @@ export function DocumentsView() {
             variant="ghost"
             size="sm"
             onClick={clearFilters}
-            className="h-9 gap-1 text-xs shrink-0"
+            className="h-11 gap-1 text-xs shrink-0"
           >
             <X className="h-3.5 w-3.5" />
             {t("clearFilters")}
@@ -1625,12 +1630,9 @@ export function DocumentsView() {
           the fetch runs, and its `finally` flips `loaded` (even if the bank is
           invalid and the fetch errors). */}
       {(loading || !loaded) && documents.length === 0 && pendingRows.length === 0 ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="text-center">
-            <Spinner size="xl" variant="jump" className="mx-auto mb-2" />
-            <div className="text-sm text-muted-foreground">{t("loadingDocuments")}</div>
-          </div>
-        </div>
+        <PageLoading label={t("loadingDocuments")} />
+      ) : failed && documents.length === 0 && pendingRows.length === 0 ? (
+        <PageError onRetry={() => void loadDocuments(currentPage)} />
       ) : documents.length > 0 || pendingRows.length > 0 ? (
         <>
           {/* Documents Table */}
@@ -1783,13 +1785,13 @@ export function DocumentsView() {
                                   titlePrefix={tCommon("harness")}
                                 />
                                 {textMatched && (
-                                  <span className="rounded-full bg-amber-300/60 px-2 py-0.5 text-[11px] font-medium text-foreground dark:bg-amber-400/30">
+                                  <span className="rounded-full bg-amber-300/60 px-2 py-0.5 text-xs font-medium text-foreground dark:bg-amber-400/30">
                                     {t("matchedInText")}
                                   </span>
                                 )}
                                 {updatingDocIds.has(doc.id) && (
                                   <span
-                                    className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
+                                    className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground"
                                     title={t("documentUpdating")}
                                   >
                                     <span className="h-1.5 w-1.5 rounded-full bg-blue-500/70 animate-pulse" />
@@ -1845,7 +1847,7 @@ export function DocumentsView() {
                     size="sm"
                     onClick={() => handlePageChange(1)}
                     disabled={currentPage === 1 || loading}
-                    className="h-7 w-7 p-0"
+                    className="h-11 w-11 p-0"
                   >
                     <ChevronsLeft className="h-3 w-3" />
                   </Button>
@@ -1854,7 +1856,7 @@ export function DocumentsView() {
                     size="sm"
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 1 || loading}
-                    className="h-7 w-7 p-0"
+                    className="h-11 w-11 p-0"
                   >
                     <ChevronLeft className="h-3 w-3" />
                   </Button>
@@ -1866,7 +1868,7 @@ export function DocumentsView() {
                     size="sm"
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={currentPage === totalPages || loading}
-                    className="h-7 w-7 p-0"
+                    className="h-11 w-11 p-0"
                   >
                     <ChevronRight className="h-3 w-3" />
                   </Button>
@@ -1875,7 +1877,7 @@ export function DocumentsView() {
                     size="sm"
                     onClick={() => handlePageChange(totalPages)}
                     disabled={currentPage === totalPages || loading}
-                    className="h-7 w-7 p-0"
+                    className="h-11 w-11 p-0"
                   >
                     <ChevronsRight className="h-3 w-3" />
                   </Button>
@@ -1885,20 +1887,17 @@ export function DocumentsView() {
           </div>
         </>
       ) : (
-        <div className="flex items-center justify-center py-20">
-          <div className="text-center">
-            <FileText className="w-10 h-10 mx-auto mb-3 text-muted-foreground/50" />
-            <div className="text-sm text-muted-foreground">
-              {hasActiveFilters ? t("noDocumentsMatchSearch") : t("noDocumentsFound")}
-            </div>
-            {hasActiveFilters && (
-              <Button variant="outline" size="sm" onClick={clearFilters} className="mt-3 gap-1">
+        <PageEmpty
+          title={hasActiveFilters ? t("noDocumentsMatchSearch") : t("noDocumentsFound")}
+          action={
+            hasActiveFilters ? (
+              <Button variant="outline" size="sm" onClick={clearFilters} className="gap-1">
                 <X className="h-3.5 w-3.5" />
                 {t("clearFilters")}
               </Button>
-            )}
-          </div>
-        </div>
+            ) : undefined
+          }
+        />
       )}
 
       {/* Document Detail Dialog */}
@@ -1954,7 +1953,7 @@ export function DocumentsView() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-8 w-8 p-0 shrink-0"
+                      className="h-11 w-11 p-0 shrink-0"
                       disabled={reprocessing}
                       aria-label={tCommon("actions")}
                     >
@@ -2075,7 +2074,7 @@ export function DocumentsView() {
                                   size="sm"
                                   onClick={saveDocumentTags}
                                   disabled={savingTags}
-                                  className="h-7 w-7 p-0"
+                                  className="h-11 w-11 p-0"
                                 >
                                   {savingTags ? (
                                     <Spinner size="xs" />
@@ -2088,7 +2087,7 @@ export function DocumentsView() {
                                   size="sm"
                                   onClick={cancelEditTags}
                                   disabled={savingTags}
-                                  className="h-7 w-7 p-0"
+                                  className="h-11 w-11 p-0"
                                 >
                                   <X className="h-3 w-3" />
                                 </Button>
@@ -2108,7 +2107,7 @@ export function DocumentsView() {
                                   variant="ghost"
                                   size="sm"
                                   onClick={startEditTags}
-                                  className="h-6 w-6 p-0"
+                                  className="h-11 w-11 p-0"
                                 >
                                   <Pencil className="h-3 w-3" />
                                 </Button>
@@ -2256,7 +2255,7 @@ export function DocumentsView() {
                                   value={contentSearch}
                                   onChange={(e) => setContentSearch(e.target.value)}
                                   placeholder={t("contentSearchPlaceholder")}
-                                  className="h-6 pl-6 pr-6 text-xs"
+                                  className="h-11 pl-6 pr-6 text-xs"
                                 />
                                 {contentSearch && (
                                   <button
@@ -2279,7 +2278,7 @@ export function DocumentsView() {
                               variant="ghost"
                               size="sm"
                               onClick={startEditContent}
-                              className="h-6 px-2 gap-1 text-xs"
+                              className="h-11 px-2 gap-1 text-xs"
                             >
                               <Pencil className="h-3 w-3" />
                               {t("editButton")}
@@ -2290,7 +2289,7 @@ export function DocumentsView() {
                             bankId={currentBank ?? ""}
                             attachments={selectedDocument.attachments}
                             highlight={contentSearch}
-                            className="p-4 text-[11px] leading-5 text-foreground/80 whitespace-pre-wrap font-mono"
+                            className="p-4 text-xs leading-5 text-foreground/80 whitespace-pre-wrap font-mono"
                           />
                         </div>
                       )

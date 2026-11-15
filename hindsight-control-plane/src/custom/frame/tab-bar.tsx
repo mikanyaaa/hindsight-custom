@@ -52,7 +52,7 @@ export function QuietTabBar({ currentTab, onTabChange }: QuietTabBarProps) {
                     select(item.id);
                   }}
                   className={cn(
-                    "flex min-h-11 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[11px]",
+                    "flex min-h-11 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-xs",
                     current ? "text-primary" : "text-muted-foreground"
                   )}
                 >
@@ -70,7 +70,7 @@ export function QuietTabBar({ currentTab, onTabChange }: QuietTabBarProps) {
               aria-expanded={moreOpen}
               onClick={() => setMoreOpen(true)}
               className={cn(
-                "flex min-h-11 w-full flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[11px]",
+                "flex min-h-11 w-full flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-xs",
                 moreCurrent ? "text-primary" : "text-muted-foreground"
               )}
             >

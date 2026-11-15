@@ -340,7 +340,7 @@ function SpanRow({
           />
           <ScopeBadge scope={span.scope || span.operation || "call"} t={t} />
         </span>
-        <span className="text-[10px] text-muted-foreground font-mono shrink-0">
+        <span className="text-xs text-muted-foreground font-mono shrink-0">
           {formatDurationMs(span.duration_ms)}
           {spanTokens != null ? ` · ${formatTokens(spanTokens)}` : ""}
         </span>
@@ -952,7 +952,7 @@ function LLMRequestChart({ bankId }: { bankId: string }) {
                 loadStats(period, o);
               }}
             >
-              <SelectTrigger className="w-[150px] h-8 text-xs">
+              <SelectTrigger className="w-[150px] h-11 text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent position="popper" className="max-h-[300px] overflow-y-auto">
@@ -971,7 +971,7 @@ function LLMRequestChart({ bankId }: { bankId: string }) {
                 loadStats(period, chartOperation, c);
               }}
             >
-              <SelectTrigger className="w-[150px] h-8 text-xs">
+              <SelectTrigger className="w-[150px] h-11 text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent position="popper" className="max-h-[300px] overflow-y-auto">

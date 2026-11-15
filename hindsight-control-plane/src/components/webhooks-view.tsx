@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { useBank } from "@/lib/bank-context";
+import { isPageFailure } from "@/custom/pages/failure";
+import { PageEmpty, PageError, PageLoading } from "@/custom/pages/status";
 import { client, Webhook, WebhookDelivery, WebhookHttpConfig } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
@@ -126,7 +128,7 @@ function KVEditor({ label, pairs, onChange }: KVEditorProps) {
           type="button"
           variant="ghost"
           size="sm"
-          className="h-6 text-xs px-2"
+          className="h-11 text-xs px-2"
           onClick={addPair}
         >
           <Plus className="w-3 h-3 mr-1" />
@@ -141,13 +143,13 @@ function KVEditor({ label, pairs, onChange }: KVEditorProps) {
                 placeholder={t("kvKeyPlaceholder")}
                 value={pair.key}
                 onChange={(e) => updatePair(i, "key", e.target.value)}
-                className="h-8 text-sm flex-1"
+                className="h-11 text-sm flex-1"
               />
               <Input
                 placeholder={t("kvValuePlaceholder")}
                 value={pair.value}
                 onChange={(e) => updatePair(i, "value", e.target.value)}
-                className="h-8 text-sm flex-1"
+                className="h-11 text-sm flex-1"
               />
               <button
                 type="button"
@@ -315,6 +317,7 @@ export function WebhooksView() {
   const [currentPage, setCurrentPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -349,8 +352,9 @@ export function WebhooksView() {
       });
       setWebhooks(data.items || []);
       setTotal(data.total || 0);
+      setFailed(false);
     } catch (error) {
-      console.error("Error loading webhooks:", error);
+      if (isPageFailure(error)) setFailed(true);
     } finally {
       setLoading(false);
     }
@@ -534,7 +538,11 @@ export function WebhooksView() {
       </div>
 
       {/* Webhooks table */}
-      {webhooks.length > 0 ? (
+      {loading && webhooks.length === 0 ? (
+        <PageLoading />
+      ) : failed && webhooks.length === 0 ? (
+        <PageError onRetry={() => void loadWebhooks(currentPage)} />
+      ) : webhooks.length > 0 ? (
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -643,7 +651,7 @@ export function WebhooksView() {
                   size="sm"
                   onClick={() => handlePageChange(1)}
                   disabled={currentPage === 1 || loading}
-                  className="h-7 w-7 p-0"
+                  className="h-11 w-11 p-0"
                 >
                   <ChevronsLeft className="h-3 w-3" />
                 </Button>
@@ -652,7 +660,7 @@ export function WebhooksView() {
                   size="sm"
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage === 1 || loading}
-                  className="h-7 w-7 p-0"
+                  className="h-11 w-11 p-0"
                 >
                   <ChevronLeft className="h-3 w-3" />
                 </Button>
@@ -664,7 +672,7 @@ export function WebhooksView() {
                   size="sm"
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === totalPages || loading}
-                  className="h-7 w-7 p-0"
+                  className="h-11 w-11 p-0"
                 >
                   <ChevronRight className="h-3 w-3" />
                 </Button>
@@ -673,7 +681,7 @@ export function WebhooksView() {
                   size="sm"
                   onClick={() => handlePageChange(totalPages)}
                   disabled={currentPage === totalPages || loading}
-                  className="h-7 w-7 p-0"
+                  className="h-11 w-11 p-0"
                 >
                   <ChevronsRight className="h-3 w-3" />
                 </Button>
@@ -682,7 +690,7 @@ export function WebhooksView() {
           )}
         </div>
       ) : (
-        <p className="text-muted-foreground text-center py-8 text-sm">{t("emptyStateCanManage")}</p>
+        <PageEmpty title={t("emptyStateCanManage")} />
       )}
 
       {/* Create Webhook Dialog */}
@@ -706,7 +714,7 @@ export function WebhooksView() {
             {/* Type (display only for now) */}
             <div className="space-y-1.5">
               <Label>{t("formTypeLabel")}</Label>
-              <div className="flex items-center h-9 px-3 rounded-md border border-border bg-muted text-sm text-muted-foreground">
+              <div className="flex items-center h-11 px-3 rounded-md border border-border bg-muted text-sm text-muted-foreground">
                 HTTP
               </div>
             </div>
@@ -897,7 +905,7 @@ export function WebhooksView() {
             {/* Type */}
             <div className="space-y-1.5">
               <Label>{t("formTypeLabel")}</Label>
-              <div className="flex items-center h-9 px-3 rounded-md border border-border bg-muted text-sm text-muted-foreground">
+              <div className="flex items-center h-11 px-3 rounded-md border border-border bg-muted text-sm text-muted-foreground">
                 HTTP
               </div>
             </div>

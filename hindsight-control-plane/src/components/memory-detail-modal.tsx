@@ -417,7 +417,7 @@ export function MemoryDetailModal({
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  className="h-6 text-xs"
+                                  className="h-11 text-xs"
                                   onClick={() => setSourceMemoryModalId(source.id)}
                                 >
                                   {t("sourceMemoryViewButton")}
@@ -540,7 +540,7 @@ export function MemoryDetailModal({
                               </div>
                               {memory.edited_at && (
                                 <span
-                                  className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-medium"
+                                  className="text-xs px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-medium"
                                   title={new Date(memory.edited_at).toLocaleString()}
                                 >
                                   {tCuration("editedBadge")}
@@ -551,7 +551,7 @@ export function MemoryDetailModal({
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-6 px-2 gap-1 text-xs"
+                                className="h-11 px-2 gap-1 text-xs"
                                 onClick={() => setEditingText(true)}
                               >
                                 <Pencil className="h-3 w-3" />

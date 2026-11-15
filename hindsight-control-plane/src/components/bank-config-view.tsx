@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useMemo, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { useBank } from "@/lib/bank-context";
+import { PageLoading } from "@/custom/pages/status";
 import { useFeatures } from "@/lib/features-context";
 import { client, type BankAliasEntry } from "@/lib/api";
 import { PreviewPromptButton } from "@/components/prompt-preview-dialog";
@@ -865,11 +866,7 @@ export function BankConfigView() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Spinner size="lg" variant="jump" />
-      </div>
-    );
+    return <PageLoading />;
   }
 
   return (
@@ -2135,7 +2132,7 @@ function BankAliasRows({ bankId }: { bankId: string | null }) {
               }
             }}
             placeholder={t("placeholder")}
-            className="h-8 text-sm"
+            className="h-11 text-sm"
             disabled={busy}
           />
           <Button size="sm" variant="outline" onClick={add} disabled={busy || !draft.trim()}>
@@ -2149,7 +2146,7 @@ function BankAliasRows({ bankId }: { bankId: string | null }) {
             value={aliases.find((a) => a.primary)?.alias ?? OWN_ID}
             onValueChange={(v) => promote(v)}
           >
-            <SelectTrigger className="w-full h-8 text-sm">
+            <SelectTrigger className="w-full h-11 text-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -2496,7 +2493,7 @@ function ScopesEditor({
                       setPattern(index, { tags_match: next as StrategyTagsMatch })
                     }
                   >
-                    <SelectTrigger className="h-8 w-auto gap-1.5 text-sm font-medium">
+                    <SelectTrigger className="h-11 w-auto gap-1.5 text-sm font-medium">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -2513,7 +2510,7 @@ function ScopesEditor({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-8 w-8 shrink-0 p-0 text-muted-foreground hover:text-destructive"
+                  className="h-11 w-11 shrink-0 p-0 text-muted-foreground hover:text-destructive"
                   aria-label={t("consolidationStrategiesRemoveRule")}
                   title={t("consolidationStrategiesRemoveRule")}
                   onClick={() => onChange(value.filter((_, i) => i !== index))}
@@ -2891,7 +2888,7 @@ function ConsolidationStrategiesPanel({
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-7 w-7 p-0"
+                  className="h-11 w-11 p-0"
                   disabled={selectedTab === 0}
                   aria-label={t("consolidationStrategiesMoveEarlier")}
                   title={t("consolidationStrategiesMoveEarlier")}
@@ -2902,7 +2899,7 @@ function ConsolidationStrategiesPanel({
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-7 w-7 p-0"
+                  className="h-11 w-11 p-0"
                   disabled={selectedTab === list.length - 1}
                   aria-label={t("consolidationStrategiesMoveLater")}
                   title={t("consolidationStrategiesMoveLater")}
@@ -3130,7 +3127,7 @@ function GeminiSafetyEditor({
               value={getThreshold(cat.value)}
               onValueChange={(v) => setThreshold(cat.value, v)}
             >
-              <SelectTrigger className="w-48 h-8 text-xs">
+              <SelectTrigger className="w-48 h-11 text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

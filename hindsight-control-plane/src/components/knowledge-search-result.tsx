@@ -36,7 +36,7 @@ export function KnowledgeSearchResult({ hit, rank, path, selected, onClick }: Pr
         selected ? "bg-primary/10 border-primary" : "border-transparent hover:bg-muted"
       }`}
     >
-      <span className="block truncate pl-7 text-[11px] text-muted-foreground/70">{path}</span>
+      <span className="block truncate pl-7 text-xs text-muted-foreground/70">{path}</span>
       <span className="flex items-center gap-1.5">
         <span className="w-5 text-xs tabular-nums text-muted-foreground">{rank}</span>
         <FileText className="w-3.5 h-3.5 flex-shrink-0 text-muted-foreground" />
@@ -54,7 +54,7 @@ export function KnowledgeSearchResult({ hit, rank, path, selected, onClick }: Pr
         </span>
       )}
       {hit.updated_at && (
-        <span className="mt-1 block pl-7 text-[11px] text-muted-foreground/70">
+        <span className="mt-1 block pl-7 text-xs text-muted-foreground/70">
           {t("updatedLabel")} {formatAbsoluteDateTime(hit.updated_at)}
         </span>
       )}

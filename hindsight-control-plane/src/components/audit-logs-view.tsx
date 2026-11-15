@@ -210,7 +210,7 @@ function AuditChart({ bankId }: { bankId: string }) {
               loadStats(period, a);
             }}
           >
-            <SelectTrigger className="w-[160px] h-8 text-xs">
+            <SelectTrigger className="w-[160px] h-11 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent position="popper" className="max-h-[300px] overflow-y-auto">
@@ -226,7 +226,7 @@ function AuditChart({ bankId }: { bankId: string }) {
               key={opt.value}
               variant={period === opt.value ? "default" : "outline"}
               size="sm"
-              className="h-8 text-xs"
+              className="h-11 text-xs"
               onClick={() => {
                 setPeriod(opt.value);
                 loadStats(opt.value, chartAction);

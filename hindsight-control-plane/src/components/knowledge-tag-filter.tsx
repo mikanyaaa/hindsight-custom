@@ -36,7 +36,7 @@ export function KnowledgeTagFilterPanel({ bankId, value, onChange }: Props) {
         value={value.tags_match ?? "any"}
         onValueChange={(v) => onChange({ ...value, tags_match: v as TagsMatch })}
       >
-        <SelectTrigger className="h-9 w-40 shrink-0" aria-label={tm("tagsMatchLabel")}>
+        <SelectTrigger className="h-11 w-40 shrink-0" aria-label={tm("tagsMatchLabel")}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

@@ -7,6 +7,8 @@ import { useVisiblePoll } from "@/custom/perf/use-visible-poll";
 // CUSTOM-HOOK: visible-poll-operations end
 import { toast } from "sonner";
 import { useBank } from "@/lib/bank-context";
+import { isPageFailure } from "@/custom/pages/failure";
+import { PageEmpty, PageError, PageLoading } from "@/custom/pages/status";
 import { client, type OperationProgress } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
@@ -156,6 +158,7 @@ export function BankOperationsView() {
   const [retryingAll, setRetryingAll] = useState(false);
   const [deletingOpId, setDeletingOpId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [selectedOperation, setSelectedOperation] = useState<OperationDetails | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [loadingDetails, setLoadingDetails] = useState(false);
@@ -317,7 +320,7 @@ export function BankOperationsView() {
       // name and absolute timestamp move to the tooltip (and the details dialog).
       return (
         <div
-          className="flex items-center gap-1.5 text-[11px] text-muted-foreground whitespace-nowrap"
+          className="flex items-center gap-1.5 text-xs text-muted-foreground whitespace-nowrap"
           title={`${stageLabel}${progress.at ? ` — ${new Date(progress.at).toLocaleString()}` : ""}`}
         >
           {pct !== null && (
@@ -340,7 +343,7 @@ export function BankOperationsView() {
 
     return (
       <div className="mt-1 space-y-1">
-        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <span className="capitalize">{stageLabel}</span>
           {hasCounts && (
             <span className="font-mono">
@@ -355,7 +358,7 @@ export function BankOperationsView() {
         )}
         {progress.at && (
           <div
-            className="flex items-center gap-1 text-[10px] text-muted-foreground/80"
+            className="flex items-center gap-1 text-xs text-muted-foreground/80"
             title={new Date(progress.at).toLocaleString()}
           >
             <Clock className="w-2.5 h-2.5" />
@@ -377,6 +380,7 @@ export function BankOperationsView() {
       if (!currentBank) return;
 
       setLoading(true);
+      setFailed(false);
       try {
         const opsData = await client.listOperations(currentBank, {
           status: newStatusFilter || undefined,
@@ -391,7 +395,7 @@ export function BankOperationsView() {
         // stay accurate even when nothing is processing and the 1s ticker is idle.
         setNowMs(Date.now());
       } catch (error) {
-        console.error("Error loading operations:", error);
+        if (isPageFailure(error)) setFailed(true);
       } finally {
         setLoading(false);
       }
@@ -618,7 +622,7 @@ export function BankOperationsView() {
             value={taskTypeFilter ?? "all"}
             onValueChange={(val) => handleTaskTypeFilterChange(val === "all" ? null : val)}
           >
-            <SelectTrigger className="h-9 w-[180px] text-sm">
+            <SelectTrigger className="h-11 w-[180px] text-sm">
               <SelectValue placeholder={t("allTypes")} />
             </SelectTrigger>
             <SelectContent>
@@ -652,7 +656,11 @@ export function BankOperationsView() {
         </div>
       </div>
       <div>
-        {operations.length > 0 ? (
+        {loading && operations.length === 0 ? (
+          <PageLoading />
+        ) : failed && operations.length === 0 ? (
+          <PageError onRetry={() => void loadOperations(statusFilter, offset, taskTypeFilter)} />
+        ) : operations.length > 0 ? (
           <>
             <div className="overflow-x-auto">
               <Table>
@@ -807,11 +815,13 @@ export function BankOperationsView() {
             )}
           </>
         ) : (
-          <p className="text-muted-foreground text-center py-8 text-sm">
-            {statusFilter
-              ? t("emptyStateWithStatus", { status: formatStatus(statusFilter) })
-              : t("emptyState")}
-          </p>
+          <PageEmpty
+            title={
+              statusFilter
+                ? t("emptyStateWithStatus", { status: formatStatus(statusFilter) })
+                : t("emptyState")
+            }
+          />
         )}
       </div>
 
@@ -913,7 +923,7 @@ export function BankOperationsView() {
                       </div>
                       {renderProgress(selectedOperation.progress)}
                       {selectedOperation.operation_type === "consolidation" && (
-                        <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground/70">
+                        <p className="mt-1.5 text-xs leading-snug text-muted-foreground/70">
                           {t("progressEstimateNote")}
                         </p>
                       )}
