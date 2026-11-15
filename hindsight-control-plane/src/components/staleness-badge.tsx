@@ -2,6 +2,9 @@
 
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
+// CUSTOM-HOOK: primitive-quiet-paper-badge begin
+import { badgeClass } from "@/custom/primitives/classes";
+// CUSTOM-HOOK: primitive-quiet-paper-badge end
 
 type TriggerLike = {
   refresh_after_consolidation?: boolean;
@@ -135,7 +138,7 @@ export function StalenessBadge({
   return (
     <span
       className={cn(
-        "px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide whitespace-nowrap",
+        badgeClass,
         retrying || (!paused && isStale)
           ? "bg-amber-500/15 text-amber-700 dark:text-amber-400"
           : paused

@@ -5,6 +5,9 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+// CUSTOM-HOOK: primitive-quiet-paper-dialog begin
+import { dialogShadow } from "@/custom/primitives/classes";
+// CUSTOM-HOOK: primitive-quiet-paper-dialog end
 
 const Dialog = DialogPrimitive.Root;
 
@@ -40,8 +43,7 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        // Card chrome: bg-card, rounded-[16px], hairline border, heavier
-        // dark-mode shadow so the panel separates from the very dark page. p-6
+        // Same 14px panel as Card. p-6
         // is fine for dialogs (vs cards' p-[21px]) — it gives the header /
         // form / footer enough breathing room.
         //
@@ -50,13 +52,14 @@ const DialogContent = React.forwardRef<
         // height to the viewport minus a gutter and let the content scroll
         // inside. Callers that need a different cap can override, since their
         // className is merged last.
-        "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-5 bg-card text-card-foreground p-6 rounded-[16px] border border-border shadow-[0_24px_64px_rgba(0,0,0,0.18)] dark:shadow-[0_24px_80px_rgba(0,0,0,0.8),0_0_0_1px_rgba(100,160,255,0.08)] duration-200 max-h-[calc(100dvh-4rem)] overflow-y-auto data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+        "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-5 bg-card text-card-foreground p-6 rounded-lg border border-border duration-200 max-h-[calc(100dvh-4rem)] overflow-y-auto data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+        dialogShadow,
         className
       )}
       {...props}
     >
       {children}
-      <DialogPrimitive.Close className="absolute right-4 top-4 size-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors focus:outline-none focus:ring-1 focus:ring-primary/40 disabled:pointer-events-none">
+      <DialogPrimitive.Close className="absolute right-3 top-3 inline-flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors motion-reduce:transition-none focus:outline-none focus:ring-1 focus:ring-primary/40 disabled:pointer-events-none">
         <X className="h-4 w-4" />
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>
@@ -86,7 +89,7 @@ const DialogTitle = React.forwardRef<
     ref={ref}
     // "Card heading" scale: 16/600.
     className={cn(
-      "text-[16px] font-semibold leading-[22px] tracking-tight text-foreground",
+      "text-base font-semibold leading-normal tracking-tight text-foreground",
       className
     )}
     {...props}
@@ -100,7 +103,7 @@ const DialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
     ref={ref}
-    className={cn("text-[13px] text-muted-foreground leading-[19px]", className)}
+    className={cn("text-sm text-muted-foreground leading-normal", className)}
     {...props}
   />
 ));

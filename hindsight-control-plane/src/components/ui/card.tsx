@@ -1,23 +1,15 @@
 import * as React from "react";
 
 import { cn } from "@/lib/utils";
+// CUSTOM-HOOK: primitive-quiet-paper-card begin
+import { cardClass } from "@/custom/primitives/classes";
+// CUSTOM-HOOK: primitive-quiet-paper-card end
 
-// Standard panel chrome — a flat 16px card with a hairline border and no drop
-// shadow. The border token already carries the mode-appropriate tint
-// (rgba(0,0,0,0.08) light / rgba(100,160,255,0.10) dark), so the ring + shadow
-// stack this replaces is redundant: it made Card read one layer higher than
-// the raw `bg-card border border-border rounded-[16px]` divs used across the
-// rest of the app. Keep the two identical.
+// Flat 14px panel. The border token carries the mode tint, so a shadow would
+// only stack a second edge on top of the hairline.
 const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div
-      ref={ref}
-      className={cn(
-        "bg-card text-card-foreground border border-border border-solid rounded-[16px]",
-        className
-      )}
-      {...props}
-    />
+    <div ref={ref} className={cn(cardClass, className)} {...props} />
   )
 );
 Card.displayName = "Card";

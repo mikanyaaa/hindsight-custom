@@ -223,7 +223,7 @@ input[type="datetime-local"] {
 }
 
 /* iOS zooms the page in on any focused field whose text is under 16px, and
-   leaves it zoomed. Fields here use 13-14px, so bump them on touch screens. */
+   leaves it zoomed. Fields use 14px, so bump them on touch screens. */
 @media (pointer: coarse) {
   input,
   textarea,

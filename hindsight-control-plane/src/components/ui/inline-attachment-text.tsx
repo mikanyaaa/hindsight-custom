@@ -19,6 +19,9 @@
 
 import { useState } from "react";
 import { FileText, ImageOff } from "lucide-react";
+// CUSTOM-HOOK: primitive-quiet-paper-attachment begin
+const attachmentType = "text-xs";
+// CUSTOM-HOOK: primitive-quiet-paper-attachment end
 
 /** Matches an attachment placeholder and captures its short id. */
 const PLACEHOLDER_RE = /⟦hs-att:([0-9a-f]{12})⟧/g;
@@ -60,7 +63,9 @@ function Unavailable({ label }: { label: string }) {
   // under an old document. Say so where it belonged rather than leaving a silent
   // gap the reader cannot interpret.
   return (
-    <span className="inline-flex items-center gap-1.5 my-1 px-2 py-1 rounded border border-dashed border-border text-[10px] text-muted-foreground align-middle">
+    <span
+      className={`inline-flex items-center gap-1.5 my-1 px-2 py-1 rounded-sm border border-dashed border-border ${attachmentType} text-muted-foreground align-middle`}
+    >
       <ImageOff className="h-3 w-3" />
       {label}
     </span>
@@ -84,9 +89,11 @@ function FileCard({ bankId, attachment }: { bankId: string; attachment: Retained
     >
       <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
       <span className="min-w-0">
-        <span className="block text-[11px] font-medium text-foreground truncate">{name}</span>
+        <span className={`block ${attachmentType} font-medium text-foreground truncate`}>
+          {name}
+        </span>
         {detail && (
-          <span className="block text-[10px] text-muted-foreground truncate">{detail}</span>
+          <span className={`block ${attachmentType} text-muted-foreground truncate`}>{detail}</span>
         )}
       </span>
     </a>

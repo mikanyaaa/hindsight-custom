@@ -1,4 +1,7 @@
 import { Braces, Tag as TagIcon, Users, X } from "lucide-react";
+// CUSTOM-HOOK: primitive-quiet-paper-chip begin
+import { chipText } from "@/custom/primitives/classes";
+// CUSTOM-HOOK: primitive-quiet-paper-chip end
 
 /**
  * The one place tags, entities and metadata are turned into chips.
@@ -27,16 +30,9 @@ export type FacetKind = "tag" | "entity" | "metadata";
 
 export type ChipSize = "xs" | "sm" | "md";
 
-// Sizes are set for legibility first. The earlier 10/12px at py-0.5 was
-// cramped enough that the text felt like a label on the chip rather than the
-// content of it; a point more type and roughly double the vertical padding
-// reads much better at a glance without making rows any taller (the row height
-// is set by the two-line document cell, not by the chips).
-const SIZE_TEXT: Record<ChipSize, string> = {
-  xs: "text-[11px] gap-0.5",
-  sm: "text-[13px] gap-1",
-  md: "text-sm gap-1",
-};
+// Sizes stay on the type scale: 12, 14 and 16. An earlier 10px size read as a
+// label stuck on the chip rather than the chip's own text.
+const SIZE_TEXT: Record<ChipSize, string> = chipText;
 const SIZE_PAD: Record<ChipSize, string> = {
   xs: "px-2 py-[3px]",
   sm: "px-2.5 py-1",
@@ -54,7 +50,7 @@ const SIZE_CLASS: Record<ChipSize, string> = {
 const KIND_SHAPE: Record<FacetKind, string> = {
   tag: "rounded-full",
   entity: "rounded-full",
-  metadata: "rounded-md",
+  metadata: "rounded-sm",
 };
 
 // Tonal variants of one another rather than separate colours. Fill AND border
@@ -317,7 +313,7 @@ export function ToneChip({
   return (
     <span
       title={title}
-      className={`inline-flex min-w-0 max-w-full items-stretch overflow-hidden whitespace-nowrap rounded-md border font-sans font-medium leading-[1.2] ${SIZE_TEXT[size]} ${TONE_CLASS[tone]} ${className ?? ""}`}
+      className={`inline-flex min-w-0 max-w-full items-stretch overflow-hidden whitespace-nowrap rounded-sm border font-sans font-medium leading-[1.2] ${SIZE_TEXT[size]} ${TONE_CLASS[tone]} ${className ?? ""}`}
     >
       <span className={`inline-flex shrink-0 items-center gap-1 ${SIZE_PAD[size]}`}>
         {icon}
