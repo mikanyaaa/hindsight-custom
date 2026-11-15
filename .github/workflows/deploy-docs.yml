@@ -1,11 +1,9 @@
 name: Deploy Docs to GitHub Pages
 
+# CUSTOM-HOOK ci-fork-scope: this fork does not publish the docs site.
+# Upstream pushes main (docs paths) to GitHub Pages. Dispatch stays so a
+# manual run is possible upstream; the job guard skips this repository.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'hindsight-docs/**'
-      - '.github/workflows/deploy-docs.yml'
   workflow_dispatch:
 
 permissions:
@@ -15,10 +13,12 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
+    # CUSTOM-HOOK ci-fork-scope: upstream only.
+    if: github.repository == 'vectorize-io/hindsight'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -42,6 +42,9 @@ jobs:
         with:
           path: hindsight-docs/build
   deploy:
+    # CUSTOM-HOOK ci-fork-scope: upstream only. Needs `build`, which is
+    # skipped here, so this job does not start either.
+    if: github.repository == 'vectorize-io/hindsight'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

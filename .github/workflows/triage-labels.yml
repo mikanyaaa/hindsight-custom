@@ -1,9 +1,10 @@
 name: Triage labels
 
 # Labels new issues as core / integration (via Gemini).
+# CUSTOM-HOOK ci-fork-scope: no automatic runs here. Upstream triggers on
+# opened issues. The job guard skips this repository if it is dispatched.
 on:
-  issues:
-    types: [opened]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -11,6 +12,8 @@ permissions:
 
 jobs:
   label:
+    # CUSTOM-HOOK ci-fork-scope: labeling uses an upstream model key.
+    if: github.repository == 'vectorize-io/hindsight'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

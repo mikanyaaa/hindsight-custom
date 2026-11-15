@@ -1,9 +1,9 @@
 name: Security Scan
 
-# Image vulnerability scanning runs on a schedule rather than per-PR: the
-# findings that matter here appear when a CVE is *published*, not when our code
-# changes, so a PR gate would stay green for weeks and then fail an unrelated PR
-# the day an advisory lands.
+# Image vulnerability scanning is manual in this fork (CUSTOM-HOOK ci-minutes).
+# Upstream runs it on a schedule rather than per-PR: the findings that matter
+# appear when a CVE is published, not when code changes, so a PR gate would
+# stay green for weeks and then fail an unrelated PR the day an advisory lands.
 #
 # Two jobs, answering two different questions:
 #   scan-published  — do the images users are running right now have a fix
@@ -12,13 +12,16 @@ name: Security Scan
 #                     per runtime base; catches a regression before it reaches
 #                     a release tag)
 on:
-  schedule:
-    # 05:30 UTC daily, after Debian's usual security-update publication window.
-    - cron: '30 5 * * *'
+  # CUSTOM-HOOK ci-minutes: no daily schedule. Both jobs stay upstream-only.
+  # Dispatch is manual.
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: security-scan
+  cancel-in-progress: true
 
 jobs:
   scan-published:

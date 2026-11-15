@@ -16,6 +16,8 @@ permissions:
 
 jobs:
   sign:
+    # CUSTOM-HOOK ci-fork-scope: signing published images is upstream-only.
+    if: github.repository == 'vectorize-io/hindsight'
     name: Sign ${{ matrix.image }}:${{ inputs.version }}${{ matrix.suffix }}
     runs-on: ubuntu-latest
     strategy:

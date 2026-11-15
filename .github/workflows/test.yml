@@ -1,8 +1,17 @@
 name: CI
 
+# Pull requests only, never a branch push: a push-and-pull_request pair would
+# run this workflow twice for the same commit. Drafts start no runners
+# (detect-changes is skipped); ready_for_review runs the path-scoped jobs.
 on:
   pull_request:
     branches: [ main ]
+    types: [opened, synchronize, reopened, ready_for_review]
+    # Root markdown does not select a package job. Per-job filters live in
+    # detect-changes. Editing this workflow file still starts the run.
+    paths-ignore:
+      - '*.md'
+      - 'LICENSE'
   workflow_dispatch:
 
 concurrency:
@@ -11,6 +20,9 @@ concurrency:
 
 jobs:
   detect-changes:
+    # CUSTOM-HOOK ci-minutes: skip draft PRs. `!= pull_request` covers
+    # workflow_dispatch, where `pull_request` is absent and must not be required.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -86,6 +98,9 @@ jobs:
       integrations-roo-code: ${{ steps.filter.outputs.integrations-roo-code }}
       dev: ${{ steps.filter.outputs.dev }}
       ci: ${{ steps.filter.outputs.ci }}
+      # CUSTOM-HOOK ci-minutes
+      docs: ${{ steps.filter.outputs.docs }}
+      generated: ${{ steps.filter.outputs.generated }}
       # Secrets are available for internal PRs and workflow_dispatch.
       # Fork PRs via pull_request event do NOT have access to secrets.
       # CUSTOM-HOOK ci-fork-scope (see CUSTOM.md): the private mirror has no Actions
@@ -149,16 +164,37 @@ jobs:
           helm:
             - 'helm/**'
           # The RUNNABLE samples only. This replaces a broad `docs` filter that also
-          # matched 'hindsight-docs/**', '*.md' and 'hindsight-integrations/**' — the
-          # last of those so an integration rename would be caught by the docs build's
-          # integrations check, except that build (build-docs) has no `if:` and runs
-          # unconditionally anyway. test-doc-examples was the filter's only consumer,
+          # matched 'hindsight-docs/**', '*.md' and 'hindsight-integrations/**'.
+          # build-docs now has its own `docs` filter (CUSTOM-HOOK ci-minutes).
+          # test-doc-examples is this filter's only consumer,
           # and it executes every sample against a live LLM-backed server, so every
           # integration and prose-only PR paid for four provider-credentialed runs that
           # none of those files can affect.
           doc-examples:
             - 'hindsight-docs/examples/**'
             - 'scripts/test-doc-examples.sh'
+          # CUSTOM-HOOK ci-minutes: the docs site build runs only for this tree,
+          # not for every PR outside hindsight-system-tests/.
+          docs:
+            - 'hindsight-docs/**'
+          # CUSTOM-HOOK ci-minutes: regenerate-and-diff only when a generator
+          # input changes. Control-plane-only edits are checked by
+          # build-control-plane, not by a Rust/OpenAPI rebuild.
+          generated:
+            - 'hindsight-api-slim/**'
+            - 'hindsight-api/**'
+            - 'hindsight-clients/**'
+            - 'hindsight-cli/**'
+            - 'hindsight-docs/**'
+            - 'hindsight-dev/**'
+            - 'hindsight-embed/**'
+            - 'hindsight-all/**'
+            - 'hindsight-all-slim/**'
+            - 'scripts/**'
+            - 'pyproject.toml'
+            - 'uv.lock'
+            - 'package.json'
+            - 'package-lock.json'
           embed:
             - 'hindsight-embed/**'
           all-npm:
@@ -171,14 +207,9 @@ jobs:
             - 'hindsight-integration-tests/**'
           system-tests:
             - 'hindsight-system-tests/**'
-          # True when the PR touches anything *other* than the system-test
-          # package. The two unconditional-by-design jobs (build-docs and
-          # verify-generated-files) hang off this rather than off a positive
-          # filter, so they keep running for every change in the repo and only
-          # step aside for a PR confined to hindsight-system-tests/ — a package
-          # nothing generates from and the docs site never reads. Iterating on
-          # that suite otherwise costs ~6 minutes of unrelated CI against a
-          # 36-second test.
+          # Kept so a system-tests-only diff is still distinguishable. build-docs
+          # and verify-generated-files no longer hang off this filter
+          # (CUSTOM-HOOK ci-minutes); they use `docs` and `generated`.
           outside-system-tests:
             # A lone negation, deliberately. paths-filter builds one matcher per
             # pattern and ORs them, so adding '**' alongside would make every
@@ -291,8 +322,12 @@ jobs:
           dev:
             - 'hindsight-dev/**'
             - 'scripts/dev/**'
+          # CUSTOM-HOOK ci-minutes: do not fan every job out when only workflow
+          # files change. Each job keeps its own path filter. `workflow_dispatch`
+          # still reaches jobs whose condition names that event. The pattern
+          # matches nothing on purpose so `ci` stays 'false'.
           ci:
-            - '.github/**'
+            - '.github/workflows/__ci_fanout_disabled__'
 
   # Fail fast if any hindsight-integrations/*/package-lock.json was regenerated
   # from the monorepo root and ended up symlinked at a workspace path instead
@@ -372,7 +407,9 @@ jobs:
     timeout-minutes: 30
     strategy:
       matrix:
-        python-version: ['3.11', '3.12', '3.13', '3.14']
+        # CUSTOM-HOOK ci-minutes: one interpreter, the version pinned in
+        # .python-version. Upstream's matrix is 3.11, 3.12, 3.13 and 3.14.
+        python-version: ['3.11']
 
     steps:
     - uses: actions/checkout@v6
@@ -1348,13 +1385,14 @@ jobs:
 
   build-docs:
     needs: [detect-changes]
-    # Keep the production docs build as an unconditional PR check. OpenAPI
-    # generation used to build the site again inside verify-generated-files;
-    # running the existing job for every PR preserves that coverage without
-    # serializing two full Docusaurus builds in the generated-files check.
-    # The one exception is a PR that touches only hindsight-system-tests/,
-    # which the docs site cannot read from — see the filter of the same name.
-    if: needs.detect-changes.outputs.outside-system-tests == 'true'
+    # CUSTOM-HOOK ci-minutes: docs build only when hindsight-docs/ changes.
+    # It used to run for every PR outside hindsight-system-tests/ (~2 min,
+    # and it ran on UI-only fixes). OpenAPI drift is covered by
+    # verify-generated-files when generator inputs change.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      needs.detect-changes.outputs.docs == 'true' ||
+      needs.detect-changes.outputs.ci == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -1635,56 +1673,29 @@ jobs:
 
   build-docker-images:
     needs: [detect-changes]
-    # CUSTOM-HOOK ci-fork-scope: image builds need no secrets; only the smoke tests
-    # do (gated below). Keep building in the mirror even though has_secrets is false.
+    # CUSTOM-HOOK ci-minutes: one secret-free image, and only when docker/
+    # changes (or a manual dispatch). Upstream built five images whenever
+    # core, docker, or the control plane changed — about 30 billed minutes
+    # on a UI pull request, which build-control-plane already checks.
     if: >-
-      (needs.detect-changes.outputs.has_secrets == 'true' || github.repository != 'vectorize-io/hindsight') &&
-      (github.event_name == 'workflow_dispatch' ||
-      needs.detect-changes.outputs.core == 'true' ||
+      github.event_name == 'workflow_dispatch' ||
       needs.detect-changes.outputs.docker == 'true' ||
-      needs.detect-changes.outputs.control-plane == 'true' ||
-      needs.detect-changes.outputs.ci == 'true')
+      needs.detect-changes.outputs.ci == 'true'
     name: Build Docker (${{ matrix.name }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       matrix:
-        # `smoke` decides which legs are loaded into the daemon and actually
-        # started. The full variants are skipped to save runner disk; cp-only
-        # is smoke tested despite being a full variant because the alpine
-        # image is small and it is the only leg that exercises the alpine Node
-        # runtime at all (it needs no LLM credentials - see NEEDS_LLM in
-        # docker/test-image.sh).
+        # CUSTOM-HOOK ci-minutes: one image. Upstream's include list also built
+        # api, api-slim, standalone, and standalone-slim. control-plane is the
+        # secret-free leg (alpine Node smoke; see docker/test-image.sh).
+        # `smoke` decides which legs are loaded and actually started.
         include:
-          - target: api-only
-            name: api
-            variant: full
-            smoke: false
-            build_args: ""
-          - target: api-only
-            name: api-slim
-            variant: slim
-            smoke: true
-            build_args: |
-              INCLUDE_LOCAL_MODELS=false
-              PRELOAD_ML_MODELS=false
           - target: cp-only
             name: control-plane
             variant: full
             smoke: true
             build_args: ""
-          - target: standalone
-            name: standalone
-            variant: full
-            smoke: false
-            build_args: ""
-          - target: standalone
-            name: standalone-slim
-            variant: slim
-            smoke: true
-            build_args: |
-              INCLUDE_LOCAL_MODELS=false
-              PRELOAD_ML_MODELS=false
 
     steps:
     - uses: actions/checkout@v6
@@ -2937,7 +2948,9 @@ jobs:
 
   build-rust-cli-arm64:
     needs: [detect-changes]
+    # CUSTOM-HOOK ci-minutes: multi-arch CLI build is an upstream release check.
     if: >-
+      github.repository == 'vectorize-io/hindsight' &&
       (github.event_name == 'workflow_dispatch' ||
       needs.detect-changes.outputs.cli == 'true' ||
       needs.detect-changes.outputs.ci == 'true')
@@ -5336,10 +5349,13 @@ jobs:
 
   verify-generated-files:
     needs: [detect-changes]
-    # Unconditional for every change except one confined to
-    # hindsight-system-tests/ — no generated file in the repo is produced from
-    # that package, so it cannot drift them. See the outside-system-tests filter.
-    if: needs.detect-changes.outputs.outside-system-tests == 'true'
+    # CUSTOM-HOOK ci-minutes: run the generator diff when those inputs change,
+    # not on a control-plane-only PR (build-control-plane already tests and
+    # builds the UI). Used to follow outside-system-tests, i.e. almost every PR.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      needs.detect-changes.outputs.generated == 'true' ||
+      needs.detect-changes.outputs.ci == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:

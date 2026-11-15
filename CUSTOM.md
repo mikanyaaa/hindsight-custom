@@ -73,12 +73,29 @@ The mirror has no Actions secrets, so jobs that need LLM/embedding/cloud credent
 | File | Job / step | Change |
 |---|---|---|
 | `.github/workflows/test.yml` | `detect-changes` output `has_secrets` | now also requires `github.repository == 'vectorize-io/hindsight'`. This single hook skips every job gated on `has_secrets`: `test-rust-cli`, `test-api` (3 shards), `test-api-llm-core`, `test-api-llm-acceptance`, `test-api-oracle`, `test-python-client`, `test-typescript-client`, `test-python-client-oracle`, `test-typescript-client-oracle`, `test-typescript-client-deno`, `test-rust-client`, `test-go-client`, `test-openclaw-integration`, `test-integration`, `test-pip-slim`, `test-embed`, `test-embed-windows`, `test-hindsight-all`, `test-doc-examples`, `test-upgrade` |
-| `.github/workflows/test.yml` | `build-docker-images` (`if:`) | `has_secrets == 'true'` OR not upstream, so image builds still run in the mirror |
-| `.github/workflows/test.yml` | `build-docker-images` steps "Setup GCP credentials for smoke test" and "Smoke test - verify container starts" | only upstream, or the `control-plane` leg (needs no credentials); api-slim / standalone-slim smoke tests are upstream-only |
-| `.github/workflows/perf-test.yml` | `perf-test`, `amb`, `obs`, `system-evals` | `if: github.repository == 'vectorize-io/hindsight'` (scheduled daily run) |
-| `.github/workflows/security-scan.yml` | `scan-published`, `scan-next-build` | `if: github.repository == 'vectorize-io/hindsight'` (scheduled daily run) |
+| `.github/workflows/test.yml` | `build-docker-images` smoke steps | credential setup stays upstream-only. The matrix is now the control-plane image alone (see `ci-minutes`), which smokes without credentials |
+| `.github/workflows/perf-test.yml` | `perf-test`, `amb`, `obs`, `system-evals` | `if: github.repository == 'vectorize-io/hindsight'` |
+| `.github/workflows/security-scan.yml` | `scan-published`, `scan-next-build` | `if: github.repository == 'vectorize-io/hindsight'` |
+| `.github/workflows/windows-smoke.yml` | `windows-client-smoke` | `if: github.repository == 'vectorize-io/hindsight'` |
+| `.github/workflows/release.yml` | every job | `workflow_dispatch` only, and `if: github.repository == 'vectorize-io/hindsight'` |
+| `.github/workflows/release-integration.yml` | `publish` | same guard |
+| `.github/workflows/sign-images.yml` | `sign` | same guard |
+| `.github/workflows/deploy-docs.yml` | `build`, `deploy` | `workflow_dispatch` only, same guard, `cancel-in-progress: true` |
+| `.github/workflows/triage-labels.yml` | `label` | `workflow_dispatch` only, same guard |
 
-Kept running in the mirror: `detect-changes`, `build-control-plane` (lint/typecheck/vitest/build), Docker control-plane build + smoke test, `check-unused-code`, `verify-generated-files`, `typecheck-api`, `build-*`, `check-*`, lint-helm-chart, `test-system`, and the integration unit-test jobs that need no secrets.
+### `ci-minutes` - keep one path-scoped check
+Actions minutes are spent by CI, not by the scheduled workflows (those jobs already skipped). A UI pull request was building five Docker images plus the docs site and the generator diff.
+
+| File | Change |
+|---|---|
+| `.github/workflows/test.yml` | Draft PRs skip `detect-changes` (no runners). `ready_for_review` runs CI. No `push` trigger, so a branch push does not double a pull request. `concurrency` already cancels in progress. Root `*.md` is `paths-ignore`. |
+| `.github/workflows/test.yml` | `ci` path filter matches nothing, so a workflow-only edit does not fan out into every package job. |
+| `.github/workflows/test.yml` | `build-docs` runs for `hindsight-docs/**` only. `verify-generated-files` runs for generator inputs only. |
+| `.github/workflows/test.yml` | `build-docker-images` is the control-plane image only, and only when `docker/**` changes. |
+| `.github/workflows/test.yml` | `build-api-python-versions` is Python 3.11 only. `build-rust-cli-arm64` is upstream-only. |
+| `.github/workflows/perf-test.yml`, `security-scan.yml`, `windows-smoke.yml` | Schedules removed. `workflow_dispatch` remains. Security and Windows cancel in progress. |
+
+Still the meaningful pull-request checks: `build-control-plane` when the UI or the TypeScript client changes, `test-system` plus `typecheck-api` when the API changes, and the matching package job when that package changes. Secret-gated jobs stay skipped.
 
 ### Sidebar accessibility (PR B)
 
