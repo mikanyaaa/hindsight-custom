@@ -717,6 +717,7 @@
       "all": "すべてのタイプ",
       "retain": "Retain",
       "consolidation": "統合",
+      "reflect": "Reflect",
       "refreshMentalModel": "メンタルモデル更新",
       "fileConvertRetain": "ファイル変換",
       "webhookDelivery": "Webhook 配信",
