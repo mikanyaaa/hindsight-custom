@@ -9,6 +9,14 @@ from unittest.mock import patch
 
 import httpx
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def _allow_unauthenticated_mcp_for_routing(monkeypatch):
+    """These tests cover URL routing, not the fail-closed default."""
+    monkeypatch.setenv("HINDSIGHT_API_MCP_ALLOW_UNAUTHENTICATED", "true")
+
+
 from mcp.client.session import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 

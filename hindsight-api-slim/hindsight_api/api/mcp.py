@@ -3,7 +3,10 @@
 import json
 import logging
 import os
+import secrets
 from contextvars import ContextVar
+from dataclasses import dataclass
+from typing import Any
 
 from fastmcp import FastMCP
 
@@ -37,6 +40,28 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+_MCP_ALLOW_UNAUTHENTICATED_ENV = "HINDSIGHT_API_MCP_ALLOW_UNAUTHENTICATED"
+_missing_mcp_auth_logged = False
+
+
+@dataclass
+class _McpCaller:
+    """Identity established for one MCP request. Not a tuple return."""
+
+    tenant_context: Any
+    pre_authenticated: bool
+    tenant_id: str | None
+    api_key_id: str | None
+
+
+def _mcp_unauthenticated_allowed() -> bool:
+    return os.environ.get(_MCP_ALLOW_UNAUTHENTICATED_ENV, "").strip().lower() == "true"
+
+
+def _token_matches(provided: str, expected: str) -> bool:
+    return secrets.compare_digest(provided.encode(), expected.encode())
+
 
 # Default bank_id from environment variable
 DEFAULT_BANK_ID = os.environ.get("HINDSIGHT_MCP_BANK_ID", "default")
@@ -431,19 +456,24 @@ class MCPMiddleware:
             await self.app(scope, receive, send)
             return
 
-        # Handle GET-before-POST gracefully (Claude Code v2.1.84+ sends GET probe before POST initialize).
-        # Without a valid Mcp-Session-Id, GET has no meaningful response — return 200 OK so
-        # the client proceeds to POST initialize instead of marking the server as failed.
+        # Strip prefix from path
+        path = path[len(self.prefix) :] or "/"
+
+        # Authenticate before any MCP response, including the sessionless GET
+        # probe. A probe must not answer 200 when the caller has no credential.
+        caller = await self._authorize(scope, send)
+        if caller is None:
+            return
+
         method = scope.get("method", "")
         if method == "GET":
             session_id = self._get_header(scope, "Mcp-Session-Id")
             if not session_id:
+                # Claude Code sends GET before POST initialize. With no session
+                # id there is nothing to stream; 200 lets that client continue.
                 logger.debug("MCP GET without session ID (client probe) — returning 200 OK")
                 await self._send_ok(send)
                 return
-
-        # Strip prefix from path
-        path = path[len(self.prefix) :] or "/"
 
         # Extract auth token from header (for tenant auth propagation)
         auth_header = self._get_header(scope, "Authorization")
@@ -457,33 +487,10 @@ class MCPMiddleware:
         # side: _send_error()'s `extra_headers` below is *response* headers.
         passthrough_headers = self._get_extra_headers(scope)
 
-        # Authenticate: check legacy MCP_AUTH_TOKEN first, then TenantExtension
-        tenant_context = None
-        auth_tenant_id: str | None = None
-        auth_api_key_id: str | None = None
-        mcp_pre_authenticated = False
-        if MCP_AUTH_TOKEN:
-            # Legacy authentication mode - validate against static token
-            if not auth_token:
-                await self._send_error(send, 401, "Authorization header required")
-                return
-            if auth_token != MCP_AUTH_TOKEN:
-                await self._send_error(send, 401, "Invalid authentication token")
-                return
-            # Legacy mode: mark as pre-authenticated so tenant extension won't re-validate
-            tenant_context = None
-            mcp_pre_authenticated = True
-        else:
-            # Use TenantExtension.authenticate_mcp() for auth
-            try:
-                auth_context = RequestContext(api_key=auth_token, extra_headers=dict(passthrough_headers))
-                tenant_context = await self.tenant_extension.authenticate_mcp(auth_context)
-                # Capture tenant_id and api_key_id set by authenticate() for usage metering
-                auth_tenant_id = auth_context.tenant_id
-                auth_api_key_id = auth_context.api_key_id
-            except AuthenticationError as e:
-                await self._send_error(send, 401, str(e), extra_headers=e.headers)
-                return
+        tenant_context = caller.tenant_context
+        auth_tenant_id = caller.tenant_id
+        auth_api_key_id = caller.api_key_id
+        mcp_pre_authenticated = caller.pre_authenticated
 
         # Set schema from tenant context so downstream DB queries use the correct schema
         schema_token = (
@@ -601,6 +608,66 @@ class MCPMiddleware:
             _current_extra_headers.reset(extra_headers_token)
             if schema_token is not None:
                 _current_schema.reset(schema_token)
+
+    async def _authorize(self, scope: dict, send) -> _McpCaller | None:
+        """Authenticate the MCP request at the origin.
+
+        Returns None after writing the error response. A configured token is
+        checked here. Otherwise the tenant extension's ``authenticate_mcp``
+        decides. The built-in open extension is not authentication: those
+        requests are refused unless ``HINDSIGHT_API_MCP_ALLOW_UNAUTHENTICATED``
+        is exactly ``true``.
+        """
+        auth_header = self._get_header(scope, "Authorization")
+        auth_token: str | None = None
+        if auth_header:
+            auth_token = auth_header[7:].strip() if auth_header.startswith("Bearer ") else auth_header.strip()
+        passthrough_headers = self._get_extra_headers(scope)
+
+        if MCP_AUTH_TOKEN:
+            if not auth_token:
+                await self._send_error(send, 401, "Authorization header required")
+                return None
+            if not _token_matches(auth_token, MCP_AUTH_TOKEN):
+                await self._send_error(send, 401, "Invalid authentication token")
+                return None
+            return _McpCaller(
+                tenant_context=None,
+                pre_authenticated=True,
+                tenant_id=None,
+                api_key_id=None,
+            )
+
+        try:
+            auth_context = RequestContext(api_key=auth_token, extra_headers=dict(passthrough_headers))
+            tenant_context = await self.tenant_extension.authenticate_mcp(auth_context)
+        except AuthenticationError as e:
+            await self._send_error(send, 401, str(e), extra_headers=e.headers)
+            return None
+
+        from hindsight_api.extensions.builtin.tenant import DefaultTenantExtension
+
+        if isinstance(self.tenant_extension, DefaultTenantExtension) and not _mcp_unauthenticated_allowed():
+            await self._refuse_unconfigured(send)
+            return None
+
+        return _McpCaller(
+            tenant_context=tenant_context,
+            pre_authenticated=False,
+            tenant_id=auth_context.tenant_id,
+            api_key_id=auth_context.api_key_id,
+        )
+
+    async def _refuse_unconfigured(self, send) -> None:
+        global _missing_mcp_auth_logged
+        if not _missing_mcp_auth_logged:
+            _missing_mcp_auth_logged = True
+            logger.error(
+                "Refusing MCP requests because HINDSIGHT_API_MCP_AUTH_TOKEN is unset "
+                "and the tenant extension does not authenticate callers. "
+                "Set HINDSIGHT_API_MCP_ALLOW_UNAUTHENTICATED=true for local development."
+            )
+        await self._send_error(send, 401, "MCP authentication is not configured")
 
     async def _send_ok(self, send):
         """Send a 200 OK response with empty body (used for GET probes without session)."""
