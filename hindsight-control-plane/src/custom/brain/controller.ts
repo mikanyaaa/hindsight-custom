@@ -125,7 +125,7 @@ export function mountBrainCanvas(
     ctx.save();
     ctx.scale(camera.dpr, camera.dpr);
     renderer.decoration(ctx, camera);
-    renderer.links(ctx, screenX, screenY, scene.links, camera.hoverIndex);
+    renderer.links(ctx, screenX, screenY, scene.links, camera.hoverIndex, camera);
     const neighbours = scene.neighbours.get(camera.hoverIndex);
     const order = scene.nodes
       .map((_, index) => index)

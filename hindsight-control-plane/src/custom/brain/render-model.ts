@@ -37,7 +37,8 @@ export interface BrainRenderer {
     x: Float32Array,
     y: Float32Array,
     links: readonly BrainLinkStyle[],
-    hover: number
+    hover: number,
+    view?: Pick<BrainView, "W" | "H">
   ) => number;
   node: (
     ctx: CanvasRenderingContext2D,
