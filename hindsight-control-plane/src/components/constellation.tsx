@@ -20,6 +20,16 @@ import {
   retainCameraSnapshot,
   type CameraSnapshot,
 } from "@/custom/graph/frame";
+import {
+  bothEndpointsOnScreen,
+  clearStrokeBatch,
+  createStrokeBatch,
+  hoverPickRadius,
+  pickNode,
+  pointerNeedsFrame,
+  pushCurve,
+  strokeCurves,
+} from "@/custom/graph/lod";
 // CUSTOM-HOOK: graph-frame-import end
 // CUSTOM-HOOK: theme-quiet-paper-graph begin
 import {
@@ -599,6 +609,8 @@ function NetworkConstellation({
     }),
     [preparedNodes.length]
   );
+  // Reused across frames so a 6,000-edge stroke does not allocate a point list.
+  const linkBatchRef = useRef(createStrokeBatch(6000));
 
   // ----- Animation loop -----
   const animate = useCallback(() => {
@@ -640,6 +652,14 @@ function NetworkConstellation({
     s.zoom = lerp(s.zoom, s.targetZoom, 0.12);
 
     const { W, H, dpr, zoom, panX, panY, mouseX, mouseY } = s;
+    // The button is still down and the camera has caught the pointer. The pixels
+    // already show that pose; rebuilding the curves here was a long task between
+    // moves, and the next move schedules its own frame.
+    if (s.isDragging && !cameraMoving) {
+      // Hold the drift clock so the crisp frame after release does not jump.
+      clockRef.current.lastFrameMs = frameStarted;
+      return;
+    }
     if (cameraMoving) {
       if (!snapshotRef.current?.active) {
         snapshotRef.current = retainCameraSnapshot(canvas, renderedCamera, snapshotRef.current);
@@ -697,21 +717,18 @@ function NetworkConstellation({
       visible[i] = sx > -margin && sx < W + margin && sy > -margin && sy < H + margin ? 1 : 0;
     }
 
-    // Hit test for hover
+    // Hit test for hover. Pointer moves outside a drag do not request this
+    // frame unless the picked node changed; see pointerNeedsFrame.
     if (mouseX >= 0 && !s.isDragging) {
-      let bestDist = zoom > 1.5 ? 80 : 30;
-      let bestIdx = -1;
-      for (let i = 0; i < preparedNodes.length; i++) {
-        if (!visible[i]) continue;
-        const dx = mouseX - screenX[i];
-        const dy = mouseY - screenY[i];
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < bestDist) {
-          bestDist = dist;
-          bestIdx = i;
-        }
-      }
-      s.hoverIndex = bestIdx;
+      s.hoverIndex = pickNode(
+        mouseX,
+        mouseY,
+        screenX,
+        screenY,
+        visible,
+        preparedNodes.length,
+        hoverPickRadius(zoom)
+      );
     }
 
     // Use this frame's hit test immediately (previously highlighting lagged one
@@ -733,54 +750,55 @@ function NetworkConstellation({
     }
 
     // --- Draw links ---
+    // One path per colour. A separate stroke per edge, and edges that only
+    // cross the window between two off-screen nodes, were the long tasks.
     const maxLinks = 6000;
     let linksDrawn = 0;
+    const linkBatch = linkBatchRef.current;
+    clearStrokeBatch(linkBatch);
 
     if (hoverIndex >= 0) {
-      // Only draw hovered node's links
+      // Only draw hovered node's links, including spokes that leave the view.
+      for (const li of hoveredLinks) {
+        const link = linksWithIndices[li];
+        if (
+          !pushCurve(
+            linkBatch,
+            link.color,
+            screenX[link.a],
+            screenY[link.a],
+            screenX[link.b],
+            screenY[link.b]
+          )
+        )
+          break;
+        linksDrawn++;
+      }
+      strokeCurves(ctx, linkBatch, 0.5, 1.5);
+
+      // A small bead of light travels each curve from the hovered node outward,
+      // so connections read as live signal paths rather than static lines.
+      // The bead is a filled disc. shadowBlur on every bead repaints the canvas,
+      // and a hub has hundreds of them.
       for (const li of hoveredLinks) {
         const link = linksWithIndices[li];
         const ax = screenX[link.a];
         const ay = screenY[link.a];
         const bx = screenX[link.b];
         const by = screenY[link.b];
-
-        ctx.strokeStyle = link.color;
-        ctx.globalAlpha = 0.5;
-        ctx.lineWidth = 1.5;
-
         const midX = (ax + bx) / 2 + (by - ay) * 0.08;
         const midY = (ay + by) / 2 - (bx - ax) * 0.08;
+        const fromHovered = link.a === hoverIndex;
+        const raw = (time * 0.22 + (li % 13) / 13) % 1;
+        const u = fromHovered ? raw : 1 - raw;
+        const iu = 1 - u;
+        const px = iu * iu * ax + 2 * iu * u * midX + u * u * bx;
+        const py = iu * iu * ay + 2 * iu * u * midY + u * u * by;
+        ctx.globalAlpha = 0.9 * (0.4 + 0.6 * Math.sin(u * Math.PI));
+        ctx.fillStyle = link.color;
         ctx.beginPath();
-        ctx.moveTo(ax, ay);
-        ctx.quadraticCurveTo(midX, midY, bx, by);
-        ctx.stroke();
-
-        // A small bead of light travels the curve from the hovered node outward,
-        // so connections read as live signal paths rather than static lines.
-        {
-          // Phase-offset per link so beads don't march in lockstep. Travel runs
-          // from the hovered node (u=0) toward its neighbor (u=1).
-          const fromHovered = link.a === hoverIndex;
-          const raw = (time * 0.22 + (li % 13) / 13) % 1;
-          const u = fromHovered ? raw : 1 - raw;
-          const iu = 1 - u;
-          // Point on the quadratic Bézier at parameter u.
-          const px = iu * iu * ax + 2 * iu * u * midX + u * u * bx;
-          const py = iu * iu * ay + 2 * iu * u * midY + u * u * by;
-          ctx.globalAlpha = 0.9 * (0.4 + 0.6 * Math.sin(u * Math.PI)); // fade at the ends
-          ctx.fillStyle = link.color;
-          ctx.shadowColor = link.color;
-          ctx.shadowBlur = 6;
-          ctx.beginPath();
-          ctx.arc(px, py, 2, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.shadowBlur = 0;
-          // Restore the stroke state the loop's next iteration expects.
-          ctx.globalAlpha = 0.5;
-          ctx.lineWidth = 1.5;
-        }
-        linksDrawn++;
+        ctx.arc(px, py, 2, 0, Math.PI * 2);
+        ctx.fill();
       }
       ctx.globalAlpha = 1;
     } else {
@@ -788,7 +806,6 @@ function NetworkConstellation({
       // without flickering (one global sine, not per-link — stays calm).
       const shimmer = 1 + 0.18 * Math.sin(time * 0.6);
       const baseAlpha = (0.06 + Math.min(zoom * 0.04, 0.1)) * shimmer;
-      ctx.lineWidth = 0.4;
 
       for (const link of linksWithIndices) {
         if (linksDrawn >= maxLinks) break;
@@ -796,27 +813,11 @@ function NetworkConstellation({
         const ay = screenY[link.a];
         const bx = screenX[link.b];
         const by = screenY[link.b];
-
-        if (
-          (ax < -margin && bx < -margin) ||
-          (ax > W + margin && bx > W + margin) ||
-          (ay < -margin && by < -margin) ||
-          (ay > H + margin && by > H + margin)
-        )
-          continue;
-
-        ctx.strokeStyle = link.color;
-        ctx.globalAlpha = baseAlpha;
-
-        const midX = (ax + bx) / 2 + (by - ay) * 0.08;
-        const midY = (ay + by) / 2 - (bx - ax) * 0.08;
-        ctx.beginPath();
-        ctx.moveTo(ax, ay);
-        ctx.quadraticCurveTo(midX, midY, bx, by);
-        ctx.stroke();
+        if (!bothEndpointsOnScreen(ax, ay, bx, by, W, H, margin)) continue;
+        if (!pushCurve(linkBatch, link.color, ax, ay, bx, by)) break;
         linksDrawn++;
       }
-      ctx.globalAlpha = 1;
+      strokeCurves(ctx, linkBatch, baseAlpha, 0.4);
     }
 
     // --- Draw scope cluster blobs (behind nodes) ---
@@ -969,21 +970,32 @@ function NetworkConstellation({
       const twinkleAlpha = 0.82 + 0.18 * Math.sin(time * 1.4 + n.phase * 2.1);
       const baseAlpha = (0.45 + Math.min(n.linkCount * 0.03, 0.5)) * twinkleAlpha;
 
-      // Dot — star-like: heat-gradient color, varied size & opacity
-      ctx.beginPath();
-      ctx.arc(sx, sy, r, 0, Math.PI * 2);
+      // Dot — star-like: heat-gradient color, varied size & opacity.
+      // Fitted overview dots are 1.5px, so a square matches the circle and skips
+      // per-node arc tessellation. Hovered and neighbour dots stay circles.
+      // The glow is a second disc: shadowBlur repaints the canvas once per node.
+      const tiny = r <= 2 && !isHovered && !isNeighbor;
       ctx.fillStyle = n.heatColor;
-      ctx.globalAlpha = isHovered ? 1 : isNeighbor ? 0.95 : hoverIndex >= 0 ? 0.08 : baseAlpha;
-
       if (isHovered || isNeighbor) {
-        ctx.shadowColor = n.heatColor;
-        ctx.shadowBlur = isHovered ? 20 : 10;
+        ctx.globalAlpha = isHovered ? 0.22 : 0.14;
+        ctx.beginPath();
+        ctx.arc(sx, sy, r * (isHovered ? 3 : 2.2), 0, Math.PI * 2);
+        ctx.fill();
       }
-      ctx.fill();
+      ctx.globalAlpha = isHovered ? 1 : isNeighbor ? 0.95 : hoverIndex >= 0 ? 0.08 : baseAlpha;
+      if (tiny) {
+        ctx.fillRect(sx - r, sy - r, r * 2, r * 2);
+      } else {
+        ctx.beginPath();
+        ctx.arc(sx, sy, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
       // Soft glow halo for brighter stars (high link count) — the halo twinkles
       // a little (out of phase with the dot's pulse) so hubs feel radiant.
-      if (n.linkCount > 3 && !isHovered && hoverIndex < 0) {
+      // At overview the halo is a few pixels at ~6% alpha, which does not read,
+      // and it doubles the node fills.
+      if (!tiny && n.linkCount > 3 && !isHovered && hoverIndex < 0) {
         const twinkle = 1 + 0.25 * Math.sin(time * 0.9 + n.phase * 1.7);
         ctx.beginPath();
         ctx.arc(sx, sy, r * 2, 0, Math.PI * 2);
@@ -992,7 +1004,6 @@ function NetworkConstellation({
         ctx.fill();
       }
 
-      ctx.shadowBlur = 0;
       ctx.globalAlpha = 1;
 
       // Label — always use deconfliction grid to prevent overlap
@@ -1232,15 +1243,6 @@ function NetworkConstellation({
       ctx.roundRect(cardX, cardY, cardW, cardH, 6);
       ctx.stroke();
 
-      if (isHovered) {
-        ctx.shadowColor = n.color;
-        ctx.shadowBlur = 15;
-        ctx.beginPath();
-        ctx.roundRect(cardX, cardY, cardW, cardH, 6);
-        ctx.stroke();
-        ctx.shadowBlur = 0;
-      }
-
       ctx.font = graphFont();
       ctx.fillStyle = isHovered ? paint.foreground : paint.muted;
       ctx.textAlign = "left";
@@ -1280,13 +1282,28 @@ function NetworkConstellation({
     const resize = () => {
       const rect = canvas.getBoundingClientRect();
       // CUSTOM-HOOK: graph-frame-dpr begin
-      if (snapshotRef.current) snapshotRef.current.active = false;
       const dpr = graphDevicePixelRatio(rect.width, rect.height);
-      // CUSTOM-HOOK: graph-frame-dpr end
       const W = rect.width;
       const H = rect.height;
-      canvas.width = W * dpr;
-      canvas.height = H * dpr;
+      const nextW = Math.round(W * dpr);
+      const nextH = Math.round(H * dpr);
+      // Assigning canvas.width clears the bitmap. The observer fires again after
+      // that assignment, often with a subpixel CSS size, and restroked the web.
+      if (
+        nextW > 0 &&
+        nextH > 0 &&
+        canvas.width === nextW &&
+        canvas.height === nextH &&
+        stateRef.current.dpr === dpr
+      ) {
+        stateRef.current.W = W;
+        stateRef.current.H = H;
+        return;
+      }
+      if (snapshotRef.current) snapshotRef.current.active = false;
+      // CUSTOM-HOOK: graph-frame-dpr end
+      canvas.width = nextW;
+      canvas.height = nextH;
       stateRef.current.dpr = dpr;
       stateRef.current.W = W;
       stateRef.current.H = H;
@@ -1451,24 +1468,40 @@ function NetworkConstellation({
     updateTooltipRef.current = updateTooltip;
 
     const handleMouseMove = (e: MouseEvent) => {
-      requestDraw();
       const rect = canvas.getBoundingClientRect();
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
-      stateRef.current.mouseX = mx;
-      stateRef.current.mouseY = my;
+      const s = stateRef.current;
+      s.mouseX = mx;
+      s.mouseY = my;
 
-      if (stateRef.current.isDragging) {
-        stateRef.current.targetPanX =
-          stateRef.current.panStartX + (e.clientX - stateRef.current.dragStartX);
-        stateRef.current.targetPanY =
-          stateRef.current.panStartY + (e.clientY - stateRef.current.dragStartY);
+      if (s.isDragging) {
+        s.targetPanX = s.panStartX + (e.clientX - s.dragStartX);
+        s.targetPanY = s.panStartY + (e.clientY - s.dragStartY);
         canvas.style.cursor = "grabbing";
         if (tooltipRef.current) tooltipRef.current.style.display = "none";
-      } else {
-        canvas.style.cursor = stateRef.current.hoverIndex >= 0 ? "pointer" : "default";
-        updateTooltip(mx, my);
+        requestDraw();
+        return;
       }
+
+      // A move that stays on the same node (or on empty space) must not restroke
+      // the web. The hit uses the last painted positions; the frame that follows
+      // a real change hit-tests again with fresh coordinates.
+      const { screenX, screenY, visible } = frameBuffers;
+      const nextHover = pickNode(
+        mx,
+        my,
+        screenX,
+        screenY,
+        visible,
+        preparedNodes.length,
+        hoverPickRadius(s.zoom)
+      );
+      if (pointerNeedsFrame(false, s.hoverIndex, nextHover)) {
+        canvas.style.cursor = nextHover >= 0 ? "pointer" : "default";
+        requestDraw();
+      }
+      updateTooltip(mx, my);
     };
 
     const handleMouseDown = (e: MouseEvent) => {
@@ -1544,7 +1577,7 @@ function NetworkConstellation({
       canvas.removeEventListener("mouseup", handleMouseUp);
       canvas.removeEventListener("mouseleave", handleMouseLeave);
     };
-  }, [animate, preparedNodes, onNodeClick, isFullscreen, nodeGroupsFn]);
+  }, [animate, preparedNodes, onNodeClick, isFullscreen, nodeGroupsFn, frameBuffers]);
 
   const toggleFullscreen = useCallback(() => {
     setIsFullscreen((prev) => !prev);
@@ -1560,17 +1593,32 @@ function NetworkConstellation({
     return () => window.removeEventListener("keydown", handleKey);
   }, [isFullscreen]);
 
-  // Re-measure canvas when fullscreen changes
+  // Re-measure canvas when fullscreen changes. The timeout also fires on mount,
+  // after the first frame; assigning the width again would clear that frame
+  // and restroke every curve for the same backing store.
   useEffect(() => {
     if (!canvasRef.current) return;
-    // Small delay to let the DOM update
     const timer = setTimeout(() => {
-      const rect = canvasRef.current!.getBoundingClientRect();
-      // Same backing-store cap as graph-frame-dpr.
-      if (snapshotRef.current) snapshotRef.current.active = false;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
       const dpr = graphDevicePixelRatio(rect.width, rect.height);
-      canvasRef.current!.width = rect.width * dpr;
-      canvasRef.current!.height = rect.height * dpr;
+      const nextW = Math.round(rect.width * dpr);
+      const nextH = Math.round(rect.height * dpr);
+      if (
+        nextW > 0 &&
+        nextH > 0 &&
+        canvas.width === nextW &&
+        canvas.height === nextH &&
+        stateRef.current.dpr === dpr
+      ) {
+        stateRef.current.W = rect.width;
+        stateRef.current.H = rect.height;
+        return;
+      }
+      if (snapshotRef.current) snapshotRef.current.active = false;
+      canvas.width = nextW;
+      canvas.height = nextH;
       stateRef.current.dpr = dpr;
       stateRef.current.W = rect.width;
       stateRef.current.H = rect.height;

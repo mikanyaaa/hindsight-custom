@@ -1,6 +1,7 @@
 import { BRAIN_GEOMETRY, projectBrainPoint } from "./geometry";
 import type { BrainData } from "./adapter";
 import type { BrainLinkStyle, BrainNodeStyle, BrainRenderer, BrainView } from "./render-model";
+import { bothEndpointsOnScreen } from "../graph/lod";
 import { GRAPH_LINK, GRAPH_NODE, graphFont, graphPalette } from "../theme/graph-palette";
 import { createElement } from "react";
 import { BrainCanvas } from "./canvas";
@@ -39,11 +40,25 @@ function screen(view: BrainView, x: number, y: number) {
   return { x: view.W / 2 + view.panX + x * view.zoom, y: view.H / 2 + view.panY + y * view.zoom };
 }
 
-function paths(x: Float32Array, y: Float32Array, links: readonly BrainLinkStyle[], hover: number) {
-  const selected = (
-    hover < 0 ? links : links.filter((link) => link.a === hover || link.b === hover)
-  ).slice(0, MAX_LINKS);
-  return selected.map((link) => {
+function paths(
+  x: Float32Array,
+  y: Float32Array,
+  links: readonly BrainLinkStyle[],
+  hover: number,
+  view?: { W: number; H: number }
+) {
+  const selected = hover < 0 ? links : links.filter((link) => link.a === hover || link.b === hover);
+  // Same rule as the network view: an edge that only crosses the window is not
+  // drawn. Hover still includes spokes that leave the view. Callers that omit
+  // the view (the SVG poster, unit tests) keep every edge.
+  const visible =
+    view && hover < 0
+      ? selected.filter((link) =>
+          bothEndpointsOnScreen(x[link.a], y[link.a], x[link.b], y[link.b], view.W, view.H, 60)
+        )
+      : selected;
+  const capped = visible.slice(0, MAX_LINKS);
+  return capped.map((link) => {
     const ax = x[link.a];
     const ay = y[link.a];
     const bx = x[link.b];
@@ -130,8 +145,8 @@ export function createBrainRenderer(data: BrainData): BrainRenderer {
       }
       ctx.globalAlpha = 1;
     },
-    links(ctx, x, y, links, hover) {
-      const edges = paths(x, y, links, hover);
+    links(ctx, x, y, links, hover, view) {
+      const edges = paths(x, y, links, hover, view);
       ctx.globalAlpha = hover < 0 ? 0.18 : 0.5;
       ctx.lineWidth = 0.5;
       for (const edge of edges) {

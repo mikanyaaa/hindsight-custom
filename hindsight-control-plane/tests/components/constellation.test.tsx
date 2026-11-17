@@ -112,7 +112,10 @@ describe("original network rendering", () => {
     fireEvent.click(screen.getByTitle(messages.constellation.pauseMotionTitle));
     flushFrame();
     expect(frames.size).toBe(0);
+    // Empty space does not restroke. A wheel does, and unmount cancels that frame.
     fireEvent.mouseMove(canvas, { clientX: 100, clientY: 100 });
+    expect(frames.size).toBe(0);
+    fireEvent.wheel(canvas, { deltaY: -100 });
     expect(frames.size).toBe(1);
     unmount();
     expect(frames.size).toBe(0);
@@ -160,6 +163,20 @@ describe("original network rendering", () => {
     localStorage.setItem("constellation-motion", "off");
     const { rerender } = render(wrap(<Constellation data={graph} />));
     flushFrame();
+    // The same backing store does not restroke. A real size change does.
+    fireEvent(window, new Event("resize"));
+    expect(frames.size).toBe(0);
+    vi.spyOn(HTMLCanvasElement.prototype, "getBoundingClientRect").mockReturnValue({
+      width: 960,
+      height: 600,
+      left: 0,
+      top: 0,
+      right: 960,
+      bottom: 600,
+      x: 0,
+      y: 0,
+      toJSON() {},
+    });
     fireEvent(window, new Event("resize"));
     expect(frames.size).toBe(1);
     flushFrame();
