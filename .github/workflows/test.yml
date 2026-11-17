@@ -1337,6 +1337,11 @@ jobs:
         test -d hindsight-control-plane/standalone/node_modules || exit 1
         node hindsight-control-plane/bin/cli.js --help
 
+    # Unit tests call the route handler directly, so they never see `next start`
+    # drop a route-set Content-Encoding header while still sending gzip bytes.
+    - name: Graph response encoding regression
+      run: npm run test:graph-encoding --workspace=hindsight-control-plane
+
     # CUSTOM-HOOK ci-minutes: fail-closed refuses `/` when the access key is unset.
     # A throwaway key keeps auth on. `/` must redirect to `/login`; `/login` must be 200.
     # Do not set HINDSIGHT_CP_ALLOW_UNAUTHENTICATED here.
