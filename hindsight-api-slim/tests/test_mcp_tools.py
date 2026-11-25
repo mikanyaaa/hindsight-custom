@@ -526,7 +526,7 @@ class TestMentalModelToolRegistration:
         assert "get_reflect_result" in tools
         assert "list_knowledge_banks" in tools
         assert "search_knowledge_bank" in tools
-        assert len(tools) == 50
+        assert len(tools) == 51
 
     def test_all_tools_have_nonempty_descriptions(self):
         """Every registered tool must expose a non-empty description.

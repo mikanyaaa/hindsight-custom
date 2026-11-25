@@ -264,6 +264,10 @@ not all of them.
   only for the chunks that actually carry an attachment, leaving every text-only
   chunk on the retain LLM. So a bank whose documents are mostly prose can keep a
   cheap text model and pay for vision only where there is something to look at.
+  That slot still uses the retain temperature. The MCP `retain_image` tool is
+  separate: it describes images with `HINDSIGHT_API_IMAGE_RETAIN_LLM_*` (its own
+  temperature, omitted when unset or `none`) and then extracts facts from the
+  description with the retain model. Normal retain is unchanged.
 - If that model cannot read images — or if Hindsight cannot tell, which is the
   case for gateway backends serving mixed catalogues — the retain is refused
   with `422` rather than dropping the attachment silently. See

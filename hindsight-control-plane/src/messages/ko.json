@@ -1474,6 +1474,7 @@
     "chartNoData": "이 기간에 데이터 없음",
     "actionAll": "모든 작업",
     "actionRetain": "Retain",
+    "actionRetainImage": "Retain image",
     "actionRecall": "Recall",
     "actionReflect": "Reflect",
     "actionCreateBank": "뱅크 생성",

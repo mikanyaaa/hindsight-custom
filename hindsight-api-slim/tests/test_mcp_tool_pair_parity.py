@@ -18,7 +18,10 @@ import pathlib
 
 import pytest
 
-MCP_TOOLS = pathlib.Path(__file__).resolve().parent.parent / "hindsight_api" / "mcp_tools.py"
+_API = pathlib.Path(__file__).resolve().parent.parent / "hindsight_api"
+MCP_TOOLS = _API / "mcp_tools.py"
+# retain_image lives in its own module so the upstream tool file stays a registration call.
+IMAGE_RETAIN = _API / "image_retain.py"
 
 #: Tools that legitimately keep bespoke bodies, and why. Named rather than
 #: pattern-matched so adding a fifth is a deliberate act, not an accident.
@@ -36,24 +39,25 @@ BESPOKE = {
 }
 
 
-def _tree():
-    return ast.parse(MCP_TOOLS.read_text())
+def _trees():
+    return [ast.parse(path.read_text()) for path in (MCP_TOOLS, IMAGE_RETAIN)]
 
 
 def _tool_pairs():
     pairs = {}
-    for node in ast.walk(_tree()):
-        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            continue
-        if not node.name.startswith("_register_"):
-            continue
-        by_name: dict[str, list] = {}
-        for inner in ast.walk(node):
-            if isinstance(inner, (ast.FunctionDef, ast.AsyncFunctionDef)) and inner is not node:
-                by_name.setdefault(inner.name, []).append(inner)
-        for name, fns in by_name.items():
-            if len(fns) == 2:
-                pairs[name] = sorted(fns, key=lambda f: f.lineno)
+    for tree in _trees():
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if not node.name.startswith("_register_"):
+                continue
+            by_name: dict[str, list] = {}
+            for inner in ast.walk(node):
+                if isinstance(inner, (ast.FunctionDef, ast.AsyncFunctionDef)) and inner is not node:
+                    by_name.setdefault(inner.name, []).append(inner)
+            for name, fns in by_name.items():
+                if len(fns) == 2:
+                    pairs[name] = sorted(fns, key=lambda f: f.lineno)
     return pairs
 
 

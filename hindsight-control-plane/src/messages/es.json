@@ -1474,6 +1474,7 @@
     "chartNoData": "Sin datos para este período",
     "actionAll": "Todas las acciones",
     "actionRetain": "Retain",
+    "actionRetainImage": "Retain image",
     "actionRecall": "Recall",
     "actionReflect": "Reflect",
     "actionCreateBank": "Crear banco",

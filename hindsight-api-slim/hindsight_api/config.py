@@ -460,6 +460,21 @@ def _parse_float_env(env_name: str, default: float) -> float:
         return default
 
 
+def _resolve_image_retain_temperature() -> float | None:
+    """Temperature for ``retain_image``'s description call.
+
+    Unset omits the parameter. It does not inherit ``HINDSIGHT_API_LLM_TEMPERATURE``
+    or ``HINDSIGHT_API_LLM_TEMPERATURE_RETAIN``: those belong to other calls, and a
+    model that rejects temperature must be able to describe images while fact
+    extraction keeps its own temperature. ``none`` / ``default`` / ``off`` / empty
+    also omit.
+    """
+    raw = os.getenv(ENV_IMAGE_RETAIN_LLM_TEMPERATURE)
+    if raw is None:
+        return None
+    return _parse_temperature(raw)
+
+
 def _parse_tristate_bool(env_name: str, raw: str | None) -> bool | None:
     """Parse a boolean env var whose *absence* is meaningful, not just a default.
 
@@ -499,6 +514,14 @@ ENV_VLM_TIMEOUT = "HINDSIGHT_API_VLM_TIMEOUT"
 ENV_VLM_MAX_RETRIES = "HINDSIGHT_API_VLM_MAX_RETRIES"
 ENV_VLM_INITIAL_BACKOFF = "HINDSIGHT_API_VLM_INITIAL_BACKOFF"
 ENV_VLM_MAX_BACKOFF = "HINDSIGHT_API_VLM_MAX_BACKOFF"
+# retain_image's description call. Provider, model, key, and URL fall back to the
+# vision slot, then the retain LLM. Temperature does not fall back: unset and
+# `none` both omit the parameter, so text retain's temperature stays as it was.
+ENV_IMAGE_RETAIN_LLM_PROVIDER = "HINDSIGHT_API_IMAGE_RETAIN_LLM_PROVIDER"
+ENV_IMAGE_RETAIN_LLM_API_KEY = "HINDSIGHT_API_IMAGE_RETAIN_LLM_API_KEY"
+ENV_IMAGE_RETAIN_LLM_MODEL = "HINDSIGHT_API_IMAGE_RETAIN_LLM_MODEL"
+ENV_IMAGE_RETAIN_LLM_BASE_URL = "HINDSIGHT_API_IMAGE_RETAIN_LLM_BASE_URL"
+ENV_IMAGE_RETAIN_LLM_TEMPERATURE = "HINDSIGHT_API_IMAGE_RETAIN_LLM_TEMPERATURE"
 ENV_RETAIN_LLM_MAX_CONCURRENT = "HINDSIGHT_API_RETAIN_LLM_MAX_CONCURRENT"
 ENV_RETAIN_LLM_MAX_RETRIES = "HINDSIGHT_API_RETAIN_LLM_MAX_RETRIES"
 ENV_RETAIN_LLM_INITIAL_BACKOFF = "HINDSIGHT_API_RETAIN_LLM_INITIAL_BACKOFF"
@@ -3821,6 +3844,13 @@ class HindsightConfig:
     vlm_max_retries: int | None
     vlm_initial_backoff: float | None
     vlm_max_backoff: float | None
+    # retain_image's description model. Unset falls back to the vision slot, then
+    # the retain LLM. Temperature does not fall back: None omits the parameter.
+    image_retain_llm_provider: str | None
+    image_retain_llm_api_key: str | None
+    image_retain_llm_model: str | None
+    image_retain_llm_base_url: str | None
+    image_retain_llm_temperature: float | None
     retain_llm_max_concurrent: int | None
     retain_llm_max_retries: int | None
     retain_llm_initial_backoff: float | None
@@ -4529,6 +4559,7 @@ class HindsightConfig:
         "llm_api_key",
         "retain_llm_api_key",
         "vlm_api_key",
+        "image_retain_llm_api_key",
         "reflect_llm_api_key",
         "consolidation_llm_api_key",
         "mental_model_refresh_llm_api_key",
@@ -4550,6 +4581,7 @@ class HindsightConfig:
         "llm_base_url",
         "retain_llm_base_url",
         "vlm_base_url",
+        "image_retain_llm_base_url",
         "reflect_llm_base_url",
         "consolidation_llm_base_url",
         "mental_model_refresh_llm_base_url",
@@ -5267,6 +5299,13 @@ class HindsightConfig:
             vlm_max_retries=_env_int(ENV_VLM_MAX_RETRIES),
             vlm_initial_backoff=_env_float(ENV_VLM_INITIAL_BACKOFF),
             vlm_max_backoff=_env_float(ENV_VLM_MAX_BACKOFF),
+            image_retain_llm_provider=os.getenv(ENV_IMAGE_RETAIN_LLM_PROVIDER) or None,
+            image_retain_llm_api_key=os.getenv(ENV_IMAGE_RETAIN_LLM_API_KEY) or None,
+            image_retain_llm_model=(
+                os.getenv(ENV_IMAGE_RETAIN_LLM_MODEL) or _env_default_model(ENV_IMAGE_RETAIN_LLM_PROVIDER)
+            ),
+            image_retain_llm_base_url=os.getenv(ENV_IMAGE_RETAIN_LLM_BASE_URL) or None,
+            image_retain_llm_temperature=_resolve_image_retain_temperature(),
             fireworks_account_id=os.getenv(ENV_FIREWORKS_ACCOUNT_ID) or None,
             fireworks_batch_base_url=os.getenv(ENV_FIREWORKS_BATCH_BASE_URL) or DEFAULT_FIREWORKS_BATCH_BASE_URL,
             fireworks_batch_max_wait_seconds=int(
