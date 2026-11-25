@@ -3,14 +3,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/hindsight-client", async () => {
   const { createClient, createConfig, sdk } = await import("@vectorize-io/hindsight-client");
+  const DATAPLANE_URL = "http://dataplane";
   return {
-    DATAPLANE_URL: "http://dataplane",
+    DATAPLANE_URL,
     getDataplaneHeaders: (extra?: Record<string, string>) => ({
       Authorization: "Bearer secret",
       ...extra,
     }),
+    dataplaneBankUrl: (bankId: string, suffix = "") =>
+      `${DATAPLANE_URL}/v1/default/banks/${encodeURIComponent(bankId)}${suffix}`,
     sdk,
-    lowLevelClient: createClient(createConfig({ baseUrl: "http://dataplane" })),
+    lowLevelClient: createClient(createConfig({ baseUrl: DATAPLANE_URL })),
   };
 });
 
@@ -18,6 +21,22 @@ import { GET as getDocuments } from "@/app/api/knowledge-banks/[bankId]/document
 import { GET as getFile } from "@/app/api/knowledge-banks/[bankId]/documents/[documentId]/file/route";
 import { GET as getMedia } from "@/app/api/knowledge-banks/[bankId]/documents/[documentId]/passages/[index]/media/route";
 import { POST as ingestFiles } from "@/app/api/knowledge-banks/[bankId]/files/ingest/route";
+import { GET as listKnowledgeOps } from "@/app/api/knowledge-banks/[bankId]/operations/route";
+import {
+  DELETE as cancelKnowledgeOp,
+  GET as getKnowledgeOp,
+} from "@/app/api/knowledge-banks/[bankId]/operations/[operationId]/route";
+import { POST as retryKnowledgeOp } from "@/app/api/knowledge-banks/[bankId]/operations/[operationId]/retry/route";
+import { DELETE as deleteKnowledgeOp } from "@/app/api/knowledge-banks/[bankId]/operations/[operationId]/delete/route";
+import {
+  DELETE as cancelMemoryOp,
+  GET as listMemoryOps,
+} from "@/app/api/operations/[agentId]/route";
+import {
+  DELETE as deleteMemoryOp,
+  GET as getMemoryOp,
+  POST as retryMemoryOp,
+} from "@/app/api/banks/[bankId]/operations/[operationId]/route";
 
 function req(url: string, init?: RequestInit): NextRequest {
   const request = new Request(url, init) as NextRequest & { nextUrl: URL };
@@ -28,6 +47,24 @@ function req(url: string, init?: RequestInit): NextRequest {
 const ctx = <T extends Record<string, string>>(params: T) => ({ params: Promise.resolve(params) });
 const media = ctx({ bankId: "docs", documentId: "d", index: "0" });
 const file = ctx({ bankId: "docs", documentId: "d" });
+const OP = "11111111-1111-4111-8111-111111111111";
+const knowledgeBank = ctx({ bankId: "my/bank" });
+const knowledgeOp = ctx({ bankId: "my/bank", operationId: OP });
+const memoryOp = ctx({ bankId: "mem", operationId: OP });
+const memoryAgent = ctx({ agentId: "mem" });
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+function upstreamCall(spy: { mock: { calls: unknown[][] } }): { url: string; method: string } {
+  const [input, init] = spy.mock.calls[0] as [Request | string, RequestInit | undefined];
+  if (input instanceof Request) return { url: input.url, method: input.method };
+  return { url: String(input), method: init?.method ?? "GET" };
+}
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -135,6 +172,122 @@ describe("/api/knowledge-banks routes", () => {
     const res = await getFile(req("http://cp/api/knowledge-banks/docs/documents/d/file"), file);
     expect(res.headers.get("content-type")).toBe("video/mp4");
     expect(res.headers.get("content-disposition")).toContain("inline");
+  });
+
+  it("lists a knowledge bank's operations on the knowledge-bank dataplane", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        jsonResponse({ bank_id: "my/bank", total: 0, limit: 10, offset: 0, operations: [] })
+      );
+    const res = await listKnowledgeOps(
+      req(
+        "http://cp/api/knowledge-banks/my%2Fbank/operations?limit=10&offset=0&exclude_parents=true&status=failed&type=knowledge_ingest"
+      ),
+      knowledgeBank
+    );
+    expect(upstreamCall(fetchSpy)).toEqual({
+      url: "http://dataplane/v1/default/knowledge-banks/my%2Fbank/operations?status=failed&type=knowledge_ingest&limit=10&offset=0&exclude_parents=true",
+      method: "GET",
+    });
+    expect(await res.json()).toEqual({
+      bank_id: "my/bank",
+      total: 0,
+      limit: 10,
+      offset: 0,
+      operations: [],
+    });
+  });
+
+  it("gets, cancels, retries, and deletes a knowledge bank operation on its own routes", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const cases: Array<{
+      run: () => Promise<Response>;
+      url: string;
+      method: string;
+    }> = [
+      {
+        run: () => getKnowledgeOp(req("http://cp/x"), knowledgeOp),
+        url: `http://dataplane/v1/default/knowledge-banks/my%2Fbank/operations/${OP}`,
+        method: "GET",
+      },
+      {
+        run: () => getKnowledgeOp(req("http://cp/x?include_payload=true"), knowledgeOp),
+        url: `http://dataplane/v1/default/knowledge-banks/my%2Fbank/operations/${OP}?include_payload=true`,
+        method: "GET",
+      },
+      {
+        run: () => cancelKnowledgeOp(req("http://cp/x", { method: "DELETE" }), knowledgeOp),
+        url: `http://dataplane/v1/default/knowledge-banks/my%2Fbank/operations/${OP}`,
+        method: "DELETE",
+      },
+      {
+        run: () => retryKnowledgeOp(req("http://cp/x", { method: "POST" }), knowledgeOp),
+        url: `http://dataplane/v1/default/knowledge-banks/my%2Fbank/operations/${OP}/retry`,
+        method: "POST",
+      },
+      {
+        run: () => deleteKnowledgeOp(req("http://cp/x", { method: "DELETE" }), knowledgeOp),
+        url: `http://dataplane/v1/default/knowledge-banks/my%2Fbank/operations/${OP}/delete`,
+        method: "DELETE",
+      },
+    ];
+    for (const action of cases) {
+      fetchSpy.mockResolvedValueOnce(jsonResponse({ operation_id: OP, success: true }));
+      const res = await action.run();
+      expect(upstreamCall(fetchSpy)).toEqual({ url: action.url, method: action.method });
+      expect(res.status).toBe(200);
+      fetchSpy.mockClear();
+    }
+  });
+
+  it("keeps memory-bank operation calls on the memory-bank dataplane", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const listUrl = "http://cp/api/operations/mem?limit=10&offset=0&exclude_parents=true";
+    const cases: Array<{
+      run: () => Promise<Response>;
+      url: string;
+      method: string;
+    }> = [
+      {
+        run: () => listMemoryOps(req(listUrl), memoryAgent),
+        url: "http://dataplane/v1/default/banks/mem/operations?limit=10&offset=0&exclude_parents=true",
+        method: "GET",
+      },
+      {
+        run: () => getMemoryOp(req("http://cp/x?include_payload=true"), memoryOp),
+        url: `http://dataplane/v1/default/banks/mem/operations/${OP}?include_payload=true`,
+        method: "GET",
+      },
+      {
+        run: () =>
+          cancelMemoryOp(
+            req(`http://cp/api/operations/mem?operation_id=${OP}`, { method: "DELETE" }),
+            memoryAgent
+          ),
+        url: `http://dataplane/v1/default/banks/mem/operations/${OP}`,
+        method: "DELETE",
+      },
+      {
+        run: () => retryMemoryOp(req("http://cp/x", { method: "POST" }), memoryOp),
+        url: `http://dataplane/v1/default/banks/mem/operations/${encodeURIComponent(OP)}/retry`,
+        method: "POST",
+      },
+      {
+        run: () => deleteMemoryOp(req("http://cp/x", { method: "DELETE" }), memoryOp),
+        url: `http://dataplane/v1/default/banks/mem/operations/${OP}/delete`,
+        method: "DELETE",
+      },
+    ];
+    for (const action of cases) {
+      fetchSpy.mockResolvedValueOnce(jsonResponse({ operation_id: OP, success: true }));
+      const res = await action.run();
+      const sent = upstreamCall(fetchSpy);
+      expect(sent).toEqual({ url: action.url, method: action.method });
+      expect(sent.url).not.toContain("/knowledge-banks/");
+      expect(res.status).toBe(200);
+      fetchSpy.mockClear();
+    }
   });
 
   it("sandboxes an uploaded original, but not a PDF, which the browser would then not show", async () => {
