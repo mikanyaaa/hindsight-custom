@@ -57,6 +57,7 @@ const AVAILABLE_EVENT_TYPES = [
   "consolidation.completed",
   "retain.completed",
   "memory_defense.triggered",
+  "mental_model.refreshed",
 ];
 
 interface KeyValuePair {

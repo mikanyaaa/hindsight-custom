@@ -56,15 +56,15 @@ export async function GET(request: NextRequest) {
 
     // Stream the body through without parsing it: on a big bank it is several
     // MB, and parsing it only to serialize it again costs the user half a second.
-    // Do not gzip it here. This route used to compress the stream and set
-    // Content-Encoding, but `next start` drops that header and still writes the
-    // gzip bytes, so the browser cannot parse the graph. The app server and any
-    // reverse proxy already compress the response.
+    // Do not gzip it here. Next (16.4.6+) gzips the response when the browser
+    // accepts that (graph JSON shrinks ~13x). This route used to gzip the stream
+    // and set Content-Encoding. `next start` dropped that header and still wrote
+    // the gzip bytes, and on 16.4.6 a second gzip made every memories tab read
+    // "No data available". The app server and any reverse proxy compress the
+    // plain JSON.
     return new NextResponse(response.body, {
       status: 200,
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
     });
   } catch (error) {
     // The browser hung up (tab switched); nobody is waiting for an answer.

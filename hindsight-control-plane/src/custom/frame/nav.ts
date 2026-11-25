@@ -17,7 +17,7 @@ export type FrameView =
   | "data"
   | "documents"
   | "entities"
-  | "knowledge"
+  | "pages"
   | "profile";
 
 export interface FrameNavItem {
@@ -31,7 +31,7 @@ export const FRAME_NAV: FrameNavItem[] = [
   { id: "home", icon: Home, primary: true },
   { id: "recall", icon: Search, primary: true },
   { id: "data", icon: Database, primary: true },
-  { id: "knowledge", icon: Network, primary: true },
+  { id: "pages", icon: Network, primary: true },
   { id: "reflect", icon: Sparkles, primary: false },
   { id: "documents", icon: FileText, primary: false },
   { id: "entities", icon: Users, primary: false },

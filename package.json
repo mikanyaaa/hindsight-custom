@@ -37,7 +37,7 @@
     "mermaid": ">=11.16.1",
     "websocket-driver": ">=0.7.5",
     "http-proxy-middleware": ">=2.0.10 <3",
-    "next": ">=16.4.5 <17",
+    "next": ">=16.4.6 <17",
     "fast-uri": ">=3.1.9 <4",
     "sharp": ">=0.35.4",
     "shell-quote": ">=1.9.0",
@@ -59,7 +59,8 @@
     "browserslist": ">=4.28.7 <5.0.0",
     "postcss-selector-parser": ">=7.1.6 <8.0.0",
     "colord": ">=2.9.4 <3.0.0",
-    "joi": ">=17.13.6 <18.0.0",
+    "joi": ">=17.13.9 <18.0.0",
+    "follow-redirects": ">=1.16.2",
     "tinypool": ">=2.1.2 <3.0.0",
     "katex": ">=0.18.2 <0.19.0"
   }

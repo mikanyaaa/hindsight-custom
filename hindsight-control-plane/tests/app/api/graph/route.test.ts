@@ -22,7 +22,9 @@ function get(headers: Record<string, string> = {}, signal?: AbortSignal) {
 describe("GET /api/graph", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("returns plain JSON when the browser accepts gzip", async () => {
+  // Next compresses route responses itself. This route must not gzip again:
+  // a missing Content-Encoding, or a second gzip, is not JSON the browser can read.
+  it("leaves compression to Next even when the browser accepts gzip", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(graph))));
 
     const response = await get({ "accept-encoding": "gzip, deflate, br" });

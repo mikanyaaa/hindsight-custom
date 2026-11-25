@@ -9,8 +9,10 @@ environment variables that any deployment could set.
 from __future__ import annotations
 
 import contextlib
+import fcntl
 import logging
 import os
+import signal
 import socket
 import subprocess
 import threading
@@ -36,6 +38,12 @@ PG0_INSTANCE = "hindsight-systest"
 PG0_PORT = 15499
 
 SERVER_STARTUP_TIMEOUT = 180.0
+
+#: How long a run waits for another run to release the database before giving up.
+DATABASE_LOCK_TIMEOUT = 1800.0
+
+#: Held from this process's first server start until it exits (see `_hold_database_lock`).
+_database_lock: object | None = None
 
 #: How often the server's worker looks for queued work. Stories that assert on what
 #: the worker has *not* claimed wait a multiple of this.
@@ -70,6 +78,11 @@ def start_stub_server(stubs: Stubs) -> StubServer:
         port=port,
         log_level="warning",
         access_log=False,
+        # uvicorn closes an idle connection after 5s, but the server's aiohttp pool keeps
+        # it for 15s and may write a request onto it just as the stub closes it
+        # ("Can not write request body", #6298). With retries off (see stub_environment)
+        # that race fails the operation, so the stub outlives the client's pool instead.
+        timeout_keep_alive=60,
     )
     server = uvicorn.Server(config)
     thread = threading.Thread(target=server.run, daemon=True, name="provider-stub")
@@ -95,12 +108,27 @@ class HindsightServer:
     _process: subprocess.Popen
 
     def stop(self) -> None:
+        self.terminate_like_a_platform(grace=30)
+
+    def terminate_like_a_platform(self, grace: float) -> bool:
+        """SIGTERM, then SIGKILL once ``grace`` seconds pass — what a rollout does.
+
+        True if the process exited on its own within the grace period. Kubernetes and
+        Docker give no more than this: whatever shutdown has not finished by then dies.
+        """
+        # SIGTERM to `uv run` alone: it forwards it to the server, and a second
+        # SIGTERM sent to the group would reach the server twice and force-exit it.
         self._process.terminate()
         try:
-            self._process.wait(timeout=30)
+            self._process.wait(timeout=grace)
+            return True
         except subprocess.TimeoutExpired:
-            self._process.kill()
+            # The whole group: SIGKILL is not forwarded, so killing `uv run` alone
+            # would leave the server itself running as an orphan.
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(self._process.pid, signal.SIGKILL)
             self._process.wait(timeout=10)
+            return False
 
     def logs(self) -> str:
         with contextlib.suppress(OSError):
@@ -132,6 +160,9 @@ def stub_environment(stub_url: str) -> dict[str, str]:
         "HINDSIGHT_API_RERANKER_SILICONFLOW_API_KEY": "stub-key",
         "HINDSIGHT_API_RERANKER_SILICONFLOW_BASE_URL": stub_url,
         "HINDSIGHT_API_RERANKER_SILICONFLOW_MODEL": "stub-reranker",
+        # Stories check recall scores against the default recency weight; a value
+        # exported in the developer's shell must not change them.
+        "HINDSIGHT_API_RECENCY_ALPHA": "0.2",
         # Consolidation's decision model (triage), for consolidation only: set up globally it
         # would also rank recall. Triage is on by default wherever one is set up; it is off
         # here so no other story's consolidation changes, and test_22 turns it on per bank.
@@ -176,6 +207,13 @@ def stub_environment(stub_url: str) -> dict[str, str]:
         # private still fails, which is what keeps the guard under test.
         "HINDSIGHT_API_WEBHOOK_ALLOWED_HOSTS": "127.0.0.1",
         "HINDSIGHT_API_CONSOLIDATION_RECONCILE_INTERVAL_SECONDS": "5",
+        # The knowledge banks' embedder reuses the memory banks' (the stub's lexical embeddings), so it
+        # embeds text only: texts, and PDFs through their text layer.
+        "HINDSIGHT_API_KB_EMBEDDINGS_PROVIDER": "text",
+        # This fork refuses MCP when no token and no tenant authenticator are
+        # configured. These stories check tool behavior, so the local server
+        # opts in. A deployment still refuses until it sets a token or this flag.
+        "HINDSIGHT_API_MCP_ALLOW_UNAUTHENTICATED": "true",
     }
 
 
@@ -204,7 +242,65 @@ def start_hindsight_worker(
     return _start(command, env=env, url=f"http://127.0.0.1:{port}", log_path=log_path)
 
 
+def run_hindsight_admin(
+    args: list[str], *, stub_url: str, log_path: Path, extra_env: dict[str, str] | None = None
+) -> str:
+    """Run one ``hindsight-admin`` command to completion, as an operator would; return its output.
+
+    Same environment and scratch directory as a server, so it reaches the same database and
+    providers. Raises with the output when the command fails.
+    """
+    run_dir = log_path.parent / "run"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / ".env").write_text("# intentionally empty: see start_hindsight_server\n")
+    result = subprocess.run(
+        ["uv", "run", "--project", str(API_DIR), "hindsight-admin", *args],
+        cwd=run_dir,
+        env=_server_env(stub_url, extra_env),
+        capture_output=True,
+        text=True,
+        timeout=SERVER_STARTUP_TIMEOUT,
+    )
+    output = result.stdout + result.stderr
+    log_path.write_text(output)
+    if result.returncode != 0:
+        raise RuntimeError(f"hindsight-admin {' '.join(args)} exited {result.returncode}:\n{output}")
+    return output
+
+
+def _hold_database_lock() -> None:
+    """Make this run the only one on the pg0 instance until the process exits.
+
+    Every run, in every checkout, uses the one instance and port above. Two runs at once
+    share the queue: one run's worker claims the other's consolidation and asks its *own*
+    stub, which has no rule for it, so the operation ends with no observations and the
+    first run's `settled` returns over an empty bank (issue #6432). Its session-start sweep
+    also deletes the other run's banks. So a second run waits here instead. The OS drops
+    the lock when the process dies, so a killed run never leaves it held.
+    """
+    global _database_lock
+    if _database_lock is not None:
+        return
+    # Beside pg0's own instances, not in a temp dir: TMPDIR differs between shells.
+    lock_path = Path.home() / ".pg0" / f"{PG0_INSTANCE}.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    lock = lock_path.open("w")
+    deadline = time.monotonic() + DATABASE_LOCK_TIMEOUT
+    while True:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            break
+        except BlockingIOError:
+            if time.monotonic() > deadline:
+                raise RuntimeError(
+                    f"another system-test run held pg0 instance {PG0_INSTANCE} for {DATABASE_LOCK_TIMEOUT}s"
+                ) from None
+            time.sleep(1)
+    _database_lock = lock
+
+
 def _server_env(stub_url: str, extra_env: dict[str, str] | None) -> dict[str, str]:
+    _hold_database_lock()
     env = os.environ.copy()
     # The repo .env is for the developer's own server; a system test must depend
     # only on what it sets here, or it passes on one machine and fails on another.
@@ -258,6 +354,8 @@ def _start(command: list[str], *, env: dict[str, str], url: str, log_path: Path)
         env=env,
         stdout=log_file,
         stderr=subprocess.STDOUT,
+        # Its own process group, so a kill reaches the server and not only `uv run`.
+        start_new_session=True,
     )
 
     server = HindsightServer(url=url, log_path=log_path, _process=process)

@@ -80,6 +80,8 @@ class _Progress:
 def _memory_with_status(status_for):
     memory = MagicMock()
     memory.resolve_bank_alias = AsyncMock(side_effect=lambda bank_id, **_: bank_id)
+    # Memory tools refuse a knowledge bank before they run. This mock is a memory bank.
+    memory.refuse_knowledge_bank = AsyncMock(return_value=None)
     memory.get_operation_status = AsyncMock(side_effect=status_for)
     memory.submit_async_reflect = AsyncMock(return_value={"operation_id": "op-reflect"})
     memory.submit_async_retain = AsyncMock(return_value={"operation_id": "op-retain"})

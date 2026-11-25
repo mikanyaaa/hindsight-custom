@@ -21,7 +21,6 @@ import {
   type CameraSnapshot,
 } from "@/custom/graph/frame";
 import {
-  bothEndpointsOnScreen,
   clearStrokeBatch,
   createStrokeBatch,
   hoverPickRadius,
@@ -63,6 +62,12 @@ interface PreparedNode {
    * lockstep. Precomputed here so the animation loop stays trig-only.
    */
   phase: number;
+  /**
+   * False when the node's text is its cluster's own label (a knowledge document's hub
+   * node): the cluster label already names it, so an inline label would print it twice.
+   * It still gets the hover card.
+   */
+  inlineLabel: boolean;
 }
 
 /** Ambient-motion preference, shared by every constellation (not per bank). */
@@ -140,6 +145,19 @@ export interface ConstellationProps {
   nodeGroupsFn?: (node: GraphNode) => string[];
   groupColorFn?: (key: string) => string;
   groupLabelFn?: (key: string) => string;
+  /**
+   * The footer's stats line, for a graph whose dots are not memories (a knowledge
+   * bank's passages). Default: "{n} memories · {visible} visible · …".
+   */
+  hudStatsFn?: (stats: HudStats) => string;
+}
+
+export interface HudStats {
+  nodes: number;
+  visible: number;
+  labels: number;
+  links: number;
+  zoom: string;
 }
 
 // ============================================================================
@@ -208,6 +226,117 @@ function heatColor(t: number): string {
   const g = Math.round(a[1] + (b[1] - a[1]) * frac);
   const bl = Math.round(a[2] + (b[2] - a[2]) * frac);
   return `rgb(${r},${g},${bl})`;
+}
+
+/** Tooltip text goes in as HTML: stored text (memories, document passages) must not run as markup. */
+function escapeHtml(s: string): string {
+  return s.replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!
+  );
+}
+
+/**
+ * The hover tooltip for one node, as HTML for ``innerHTML``.
+ *
+ * Every value is escaped or forced to a number, including ones that look computed:
+ * a colour can come from a caller's ``node.color``, and the id, dates and counts
+ * come from stored data.
+ */
+export function tooltipHtml(
+  node: GraphNode,
+  heatColor: string,
+  rawLinkCount: number,
+  isDark: boolean
+): string {
+  const meta = node.metadata as Record<string, any> | undefined;
+  const fullText = escapeHtml(String(meta?.text || node.label || node.id));
+  const entities: string[] = meta?.entities
+    ? String(meta.entities)
+        .split(",")
+        .map((e: string) => escapeHtml(e.trim()))
+        .filter(Boolean)
+    : [];
+  const nodeColor = escapeHtml(String(heatColor));
+  const linkCount = Number(rawLinkCount) || 0;
+  const factType = escapeHtml(String(meta?.fact_type || node.group || "memory"));
+  const context = meta?.context && meta.context !== "N/A" ? escapeHtml(String(meta.context)) : null;
+  const tags: string[] = Array.isArray(meta?.tags) ? meta.tags.map(String).map(escapeHtml) : [];
+  const occurredStart = meta?.occurred_start || null;
+  const occurredEnd = meta?.occurred_end || null;
+  const mentionedAt = meta?.mentioned_at || null;
+  const proofCount = Number(meta?.proof_count) || null;
+  const documentId = meta?.document_id || null;
+
+  const paint = graphPalette(isDark);
+  const muted = paint.muted;
+  const dimmed = paint.muted;
+  const labelStyle = `font-size:12px;color:${dimmed};text-transform:uppercase;letter-spacing:0.04em;font-weight:500`;
+  const valStyle = `font-size:12px;color:${paint.foreground}`;
+  const rowStyle = `display:flex;justify-content:space-between;align-items:baseline;gap:12px`;
+
+  // Type badge + link count
+  let html = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">`;
+  html += `<span style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:${nodeColor};background:${nodeColor}18;padding:2px 8px;border-radius:6px">${factType}</span>`;
+  html += `<span style="font-size:12px;color:${muted}">${linkCount} link${linkCount !== 1 ? "s" : ""}</span>`;
+  html += `</div>`;
+
+  // Text
+  html += `<div style="font-size:12px;line-height:1.6;margin-bottom:8px">${fullText}</div>`;
+
+  // Metadata grid
+  html += `<div style="display:flex;flex-direction:column;gap:4px;border-top:1px solid ${paint.border};padding-top:8px">`;
+
+  if (context) {
+    html += `<div style="${rowStyle}"><span style="${labelStyle}">Context</span><span style="${valStyle}">${context}</span></div>`;
+  }
+
+  // Format ISO timestamp as "YYYY-MM-DD HH:MM" — keeps the row compact
+  // while still surfacing the time-of-day the user asked for.
+  const fmtTs = (iso: string) => escapeHtml(String(iso).slice(0, 16).replace("T", " "));
+
+  if (occurredStart) {
+    const start = fmtTs(occurredStart);
+    const end = occurredEnd ? fmtTs(occurredEnd) : null;
+    const occurredDisplay = end && end !== start ? `${start} → ${end}` : start;
+    html += `<div style="${rowStyle}"><span style="${labelStyle}">Occurred</span><span style="${valStyle}">${occurredDisplay}</span></div>`;
+  }
+
+  if (mentionedAt) {
+    html += `<div style="${rowStyle}"><span style="${labelStyle}">Mentioned</span><span style="${valStyle}">${fmtTs(mentionedAt)}</span></div>`;
+  }
+
+  if (proofCount && proofCount > 1) {
+    html += `<div style="${rowStyle}"><span style="${labelStyle}">Evidence</span><span style="${valStyle}">${proofCount} sources</span></div>`;
+  }
+
+  if (documentId) {
+    html += `<div style="${rowStyle}"><span style="${labelStyle}">Document</span><span style="font-size:12px;font-family:monospace;color:${muted}">${escapeHtml(String(documentId).slice(0, 12))}...</span></div>`;
+  }
+
+  html += `</div>`;
+
+  // Entities
+  if (entities.length > 0 && !(entities.length === 1 && entities[0] === "None")) {
+    html += `<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px">`;
+    for (const ent of entities) {
+      html += `<span style="font-size:12px;background:${paint.chip};color:${paint.chipText};padding:2px 7px;border-radius:6px">${ent}</span>`;
+    }
+    html += `</div>`;
+  }
+
+  // Tags
+  if (tags.length > 0) {
+    html += `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">`;
+    for (const tag of tags) {
+      html += `<span style="font-size:12px;background:${nodeColor}15;color:${nodeColor};padding:2px 7px;border-radius:6px">#${tag}</span>`;
+    }
+    html += `</div>`;
+  }
+
+  // ID
+  html += `<div style="margin-top:8px;font-size:12px;font-family:monospace;color:${dimmed}">${escapeHtml(String(node.id))}</div>`;
+  return html;
 }
 
 function hashStr(s: string): number {
@@ -306,6 +435,7 @@ function NetworkConstellation({
   nodeGroupsFn,
   groupColorFn,
   groupLabelFn,
+  hudStatsFn,
 }: ConstellationProps) {
   const t = useTranslations("constellation");
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -422,14 +552,24 @@ function NetworkConstellation({
     }
     const clusterOrder = [...clusterMembers.keys()];
     const clusterCentroid = new Map<string, { cx: number; cy: number; r: number }>();
-    const clusterRingR = Math.sqrt(Math.max(count, 1)) * 60;
+    // Clusters sit along an Archimedean spiral (r = b·θ), each one a blob-width further
+    // along the curve than the previous, so consecutive clusters stay neighbours (callers
+    // order related clusters together) and many clusters pack into a disc. The turns are
+    // spaced by the largest blob so they never overlap. (Previously one ring of radius
+    // √n·60: with dozens of clusters that was a thin necklace with an empty middle.)
+    const blobRadius = (k: string) => 22 + Math.sqrt(clusterMembers.get(k)!.length) * 18;
+    const CLUSTER_GAP = 30;
+    const maxBlobR = clusterOrder.reduce((m, k) => Math.max(m, blobRadius(k)), 0);
+    const spiralB = (2 * maxBlobR + CLUSTER_GAP) / (2 * Math.PI);
+    let theta = clusterOrder.length > 1 ? Math.PI : 0;
+    let prevR = 0;
     clusterOrder.forEach((k, ci) => {
-      const a = (ci / Math.max(clusterOrder.length, 1)) * Math.PI * 2;
-      const members = clusterMembers.get(k)!;
-      const blobR = 22 + Math.sqrt(members.length) * 18;
+      const blobR = blobRadius(k);
+      if (ci > 0) theta += (prevR + blobR + CLUSTER_GAP) / Math.max(spiralB * theta, 1);
+      prevR = blobR;
       clusterCentroid.set(k, {
-        cx: Math.cos(a) * clusterRingR,
-        cy: Math.sin(a) * clusterRingR,
+        cx: Math.cos(theta) * spiralB * theta,
+        cy: Math.sin(theta) * spiralB * theta,
         r: blobR,
       });
     });
@@ -453,6 +593,7 @@ function NetworkConstellation({
 
     // Prepare node positions and colors; card text is prepared only when drawn.
     const nodes: PreparedNode[] = data.nodes.map((node, i) => {
+      const text = node.label || node.id.substring(0, 12);
       const ck = clusterKeys ? clusterKeys[i] : null;
       const nodeGroupList = nodeGroups ? nodeGroups[i] : [];
       const color = vennActive
@@ -517,9 +658,12 @@ function NetworkConstellation({
         color,
         // When clustering / venn, the dot is tinted by its group color so the
         // grouping reads at a glance; otherwise it keeps the heat gradient.
-        heatColor: centroid || vennActive ? color : heat,
+        // A caller-supplied heat (e.g. recency) colours the dots even inside clusters, whose
+        // blobs keep the cluster colour; otherwise a clustered dot takes its cluster's colour.
+        heatColor: (centroid || vennActive) && !nodeHeatFn ? color : heat,
         linkCount: lc,
         phase: ((Math.abs(seed) % 1000) / 1000) * Math.PI * 2,
+        inlineLabel: !(ck != null && clusterLabelFn?.(ck) === text),
       };
     });
 
@@ -555,6 +699,8 @@ function NetworkConstellation({
       b: number;
       color: string;
       type: string;
+      /** Joins two different clusters: drawn as a visible bridge, not a faint thread. */
+      bridge: boolean;
     }> = [];
     const byNode = new Map<number, number[]>();
 
@@ -571,7 +717,10 @@ function NetworkConstellation({
         DEFAULT_NODE_COLOR;
 
       const idx = linksIdx.length;
-      linksIdx.push({ a: ai, b: bi, color, type: link.type || "semantic" });
+      const ka = clusterKeys?.[ai];
+      const kb = clusterKeys?.[bi];
+      const bridge = ka != null && kb != null && ka !== kb;
+      linksIdx.push({ a: ai, b: bi, color, type: link.type || "semantic", bridge });
 
       if (!byNode.has(ai)) byNode.set(ai, []);
       if (!byNode.has(bi)) byNode.set(bi, []);
@@ -598,6 +747,8 @@ function NetworkConstellation({
     groupLabelFn,
     isDark,
   ]);
+  // The legend lists only the link kinds this graph has (a knowledge bank's has none of them).
+  const linkTypes = useMemo(() => new Set(linksWithIndices.map((l) => l.type)), [linksWithIndices]);
 
   // Reuse the frame buffers until the node count changes instead of allocating
   // three graph-sized typed arrays on every animation frame.
@@ -611,6 +762,7 @@ function NetworkConstellation({
   );
   // Reused across frames so a 6,000-edge stroke does not allocate a point list.
   const linkBatchRef = useRef(createStrokeBatch(6000));
+  const bridgeBatchRef = useRef(createStrokeBatch(6000));
 
   // ----- Animation loop -----
   const animate = useCallback(() => {
@@ -806,6 +958,11 @@ function NetworkConstellation({
       // without flickering (one global sine, not per-link — stays calm).
       const shimmer = 1 + 0.18 * Math.sin(time * 0.6);
       const baseAlpha = (0.06 + Math.min(zoom * 0.04, 0.1)) * shimmer;
+      // Links between clusters carry the structure (which groups relate), so they stay
+      // readable at rest; links inside a cluster are texture and stay faint.
+      const bridgeAlpha = 0.2 * shimmer;
+      const bridgeBatch = bridgeBatchRef.current;
+      clearStrokeBatch(bridgeBatch);
 
       for (const link of linksWithIndices) {
         if (linksDrawn >= maxLinks) break;
@@ -813,11 +970,19 @@ function NetworkConstellation({
         const ay = screenY[link.a];
         const bx = screenX[link.b];
         const by = screenY[link.b];
-        if (!bothEndpointsOnScreen(ax, ay, bx, by, W, H, margin)) continue;
-        if (!pushCurve(linkBatch, link.color, ax, ay, bx, by)) break;
+        if (
+          (ax < -margin && bx < -margin) ||
+          (ax > W + margin && bx > W + margin) ||
+          (ay < -margin && by < -margin) ||
+          (ay > H + margin && by > H + margin)
+        )
+          continue;
+        const batch = link.bridge ? bridgeBatch : linkBatch;
+        if (!pushCurve(batch, link.color, ax, ay, bx, by)) break;
         linksDrawn++;
       }
       strokeCurves(ctx, linkBatch, baseAlpha, 0.4);
+      strokeCurves(ctx, bridgeBatch, bridgeAlpha, 0.8);
     }
 
     // --- Draw scope cluster blobs (behind nodes) ---
@@ -826,6 +991,14 @@ function NetworkConstellation({
     if (clusters.length > 0) {
       ctx.save();
       ctx.lineJoin = "round";
+      const labelQueue: Array<{
+        text: string;
+        color: string;
+        x: number;
+        y: number;
+        size: number;
+        hovered: boolean;
+      }> = [];
       for (const cluster of clusters) {
         const pts: Array<[number, number]> = [];
         for (const idx of cluster.members) {
@@ -850,9 +1023,18 @@ function NetworkConstellation({
           my = cy + cluster.wcy * zoom;
         }
 
-        const pad = 26;
+        // Padding scales with zoom (20 world units, 4–26px on screen): a fixed 26px pad
+        // swelled every blob far past its neighbours once a many-cluster view was zoomed
+        // out to fit, and the spiral's gaps vanished under overlapping hulls.
+        const pad = Math.max(4, Math.min(26, 20 * zoom));
         let rad = pad;
-        ctx.fillStyle = hexToRgba(cluster.color, isDark ? 0.1 : 0.08);
+        // Soft glow: denser at the cluster's centre, fading toward its edge.
+        let reach = pad;
+        for (const [x, y] of pts) reach = Math.max(reach, Math.hypot(x - mx, y - my) + pad);
+        const glow = ctx.createRadialGradient(mx, my, 0, mx, my, reach);
+        glow.addColorStop(0, hexToRgba(cluster.color, isDark ? 0.2 : 0.16));
+        glow.addColorStop(1, hexToRgba(cluster.color, isDark ? 0.05 : 0.04));
+        ctx.fillStyle = glow;
         ctx.strokeStyle = hexToRgba(cluster.color, 0.35);
         ctx.lineWidth = 1.25;
         ctx.beginPath();
@@ -862,47 +1044,69 @@ function NetworkConstellation({
           for (const [x, y] of pts) rad = Math.max(rad, Math.hypot(x - mx, y - my) + pad);
           ctx.arc(mx, my, rad, 0, Math.PI * 2);
         } else {
-          const hull = convexHull(pts);
-          for (let j = 0; j < hull.length; j++) {
-            // Push each vertex outward from the centroid for a rounded, padded blob.
-            const [hx, hy] = hull[j];
+          // Push each hull vertex outward from the centroid, then run a closed curve
+          // through the edge midpoints with the vertices as control points: a smooth,
+          // rounded blob instead of a straight-edged polygon.
+          const ring = convexHull(pts).map(([hx, hy]) => {
             const dx = hx - mx;
             const dy = hy - my;
             const d = Math.hypot(dx, dy) || 1;
-            const ex = hx + (dx / d) * pad;
-            const ey = hy + (dy / d) * pad;
-            if (j === 0) ctx.moveTo(ex, ey);
-            else ctx.lineTo(ex, ey);
+            return [hx + (dx / d) * pad, hy + (dy / d) * pad] as [number, number];
+          });
+          const mid = (j: number): [number, number] => {
+            const [ax, ay] = ring[j % ring.length];
+            const [bx, by] = ring[(j + 1) % ring.length];
+            return [(ax + bx) / 2, (ay + by) / 2];
+          };
+          const [sx0, sy0] = mid(ring.length - 1);
+          ctx.moveTo(sx0, sy0);
+          for (let j = 0; j < ring.length; j++) {
+            const [qx, qy] = mid(j);
+            ctx.quadraticCurveTo(ring[j][0], ring[j][1], qx, qy);
           }
           ctx.closePath();
         }
         ctx.fill();
         ctx.stroke();
 
-        // Label: a solid colored pill at the top of the circle (readable over dots).
+        // Queue the label; they are placed after every blob is drawn (see below).
         if (cluster.label && zoom > 0.15) {
-          const label = cluster.label;
-          ctx.font = graphFont("600");
-          const tw = ctx.measureText(label).width;
-          const padX = 8;
-          const pillH = 19;
-          let topY = my;
-          for (const [, y] of pts) topY = Math.min(topY, y);
-          const ly = (nodeGroupsFn ? my - rad : topY - pad) - 12;
-          const pw = tw + padX * 2;
-          ctx.fillStyle = cluster.color;
-          ctx.beginPath();
-          if (typeof ctx.roundRect === "function") {
-            ctx.roundRect(mx - pw / 2, ly - pillH / 2, pw, pillH, 9.5);
-          } else {
-            ctx.rect(mx - pw / 2, ly - pillH / 2, pw, pillH);
-          }
-          ctx.fill();
-          ctx.fillStyle = inkOn(cluster.color);
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          ctx.fillText(label, mx, ly + 0.5);
+          labelQueue.push({
+            text: cluster.label,
+            color: cluster.color,
+            x: mx,
+            y: nodeGroupsFn ? my - rad - 10 : my,
+            size: cluster.members.length,
+            hovered: hoverIndex >= 0 && cluster.members.includes(hoverIndex),
+          });
         }
+      }
+      // Map-style labels: text in the cluster's colour with a halo of the background,
+      // centred on the cluster. Biggest clusters (and the hovered one) claim space first and
+      // a label that would overlap one already placed is skipped, so dense views stay
+      // readable and more names appear as you zoom in. (Solid pills at every cluster's top
+      // edge piled on top of each other once there were dozens of clusters.)
+      labelQueue.sort((p, q) => Number(q.hovered) - Number(p.hovered) || q.size - p.size);
+      const placed: Array<[number, number, number, number]> = [];
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.lineJoin = "round";
+      for (const l of labelQueue) {
+        const fontPx = Math.round(Math.min(14, Math.max(12, 10 + Math.sqrt(l.size) / 4)));
+        ctx.font = graphFont("600").replace("12px", `${fontPx}px`);
+        const w = ctx.measureText(l.text).width + 8;
+        const h = fontPx + 6;
+        const box: [number, number, number, number] = [l.x - w / 2, l.y - h / 2, w, h];
+        const overlaps = placed.some(
+          ([x, y, bw, bh]) => box[0] < x + bw && x < box[0] + w && box[1] < y + bh && y < box[1] + h
+        );
+        if (overlaps && !l.hovered) continue;
+        placed.push(box);
+        ctx.strokeStyle = isDark ? "rgba(9,9,11,0.85)" : "rgba(255,255,255,0.9)";
+        ctx.lineWidth = 3.5;
+        ctx.strokeText(l.text, l.x, l.y);
+        ctx.fillStyle = l.color;
+        ctx.fillText(l.text, l.x, l.y);
       }
       ctx.restore();
       ctx.textAlign = "left";
@@ -1011,6 +1215,8 @@ function NetworkConstellation({
         // Hovered node always gets a label (skip deconfliction)
         drawLabel(ctx, n, i, sx, sy, r, true, true, isDark, zoom);
         labelsShown++;
+      } else if (!n.inlineLabel) {
+        // Named by its cluster label already.
       } else if (zoom > 1.5) {
         const cardW = Math.min(200, 80 + zoom * 25);
         const cardH = 50;
@@ -1041,13 +1247,14 @@ function NetworkConstellation({
     ctx.font = graphMono();
     ctx.fillStyle = paint.muted;
     ctx.textAlign = "left";
-    const stats = t("hudStats", {
-      memories: preparedNodes.length,
+    const hud: HudStats = {
+      nodes: preparedNodes.length,
       visible: visibleCount,
       labels: labelsShown,
       links: linksDrawn,
       zoom: zoom.toFixed(2),
-    });
+    };
+    const stats = hudStatsFn ? hudStatsFn(hud) : t("hudStats", { ...hud, memories: hud.nodes });
     const statsWidth = ctx.measureText(stats).width;
     ctx.font = graphFont("600");
     const linkTypeLabel: Record<string, string> = {
@@ -1069,6 +1276,7 @@ function NetworkConstellation({
     let legendX = W - 12;
     ctx.font = graphFont("600");
     for (const [type, color] of Object.entries(LINK_TYPE_COLORS).reverse()) {
+      if (!linkTypes.has(type)) continue;
       const label = linkTypeLabel[type] ?? type;
       const tw = ctx.measureText(label).width;
       ctx.fillStyle = paint.muted;
@@ -1082,10 +1290,11 @@ function NetworkConstellation({
     }
 
     // Heat gradient legend (top-left, below instructions). Suppressed while
-    // clustering, where node color encodes the cluster (scope), not the gradient.
-    // On a phone the toolbar occupies the top, so the legend starts beneath it.
+    // clustering, where node color encodes the cluster (scope), not the gradient,
+    // unless a heat function colors the dots. On a phone the toolbar occupies
+    // the top, so the legend starts beneath it.
     const hudTop = controls && W < 720 ? 48 : 0;
-    if (clusters.length === 0) {
+    if (clusters.length === 0 || nodeHeatFn) {
       ctx.textAlign = "left";
       ctx.font = graphFont("600");
       ctx.fillStyle = paint.muted;
@@ -1189,10 +1398,13 @@ function NetworkConstellation({
     linksWithIndices,
     linksByNode,
     clusters,
+    linkTypes,
     t,
+    hudStatsFn,
     frameBuffers,
     nodeSizeFn,
     nodeGroupsFn,
+    nodeHeatFn,
     compactLabels,
     heatLegendLabel,
     heatLegendEndpoints,
@@ -1336,12 +1548,22 @@ function NetworkConstellation({
 
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
-      requestDraw();
+      const s = stateRef.current;
       const factor = e.deltaY > 0 ? 0.9 : 1.1;
-      stateRef.current.targetZoom = Math.max(
-        0.03,
-        Math.min(8, stateRef.current.targetZoom * factor)
-      );
+      const zoom = Math.max(0.03, Math.min(8, s.targetZoom * factor));
+      // Keep the world point under the cursor fixed: screen = W/2 + pan + world·zoom.
+      // Applied at once rather than eased — easing zoom and pan separately lets the
+      // point slide away mid-animation. (Previously only the zoom changed, so the view
+      // always zoomed about the centre, not where the cursor was.)
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left - s.W / 2;
+      const my = e.clientY - rect.top - s.H / 2;
+      const wx = (mx - s.panX) / s.zoom;
+      const wy = (my - s.panY) / s.zoom;
+      s.zoom = s.targetZoom = zoom;
+      s.panX = s.targetPanX = mx - wx * zoom;
+      s.panY = s.targetPanY = my - wy * zoom;
+      requestDraw();
     };
 
     const updateTooltip = (mx: number, my: number) => {
@@ -1365,95 +1587,12 @@ function NetworkConstellation({
       // Only rebuild innerHTML when the hovered node changes
       if (idx !== s.prevHoverIndex) {
         s.prevHoverIndex = idx;
-        const meta = node.metadata as Record<string, any> | undefined;
-        const fullText = meta?.text || node.label || node.id;
-        const entities: string[] = meta?.entities
-          ? String(meta.entities)
-              .split(",")
-              .map((e: string) => e.trim())
-              .filter(Boolean)
-          : [];
-        const nodeColor = preparedNodes[idx].heatColor;
-        const linkCount = preparedNodes[idx].linkCount;
-        const factType = meta?.fact_type || node.group || "memory";
-        const context = meta?.context && meta.context !== "N/A" ? meta.context : null;
-        const tags: string[] = Array.isArray(meta?.tags) ? meta.tags : [];
-        const occurredStart = meta?.occurred_start || null;
-        const occurredEnd = meta?.occurred_end || null;
-        const mentionedAt = meta?.mentioned_at || null;
-        const proofCount = meta?.proof_count || null;
-        const documentId = meta?.document_id || null;
-
-        const tipPaint = graphPalette(isDark);
-        const muted = tipPaint.muted;
-        const dimmed = tipPaint.muted;
-        const labelStyle = `font-size:12px;color:${dimmed};text-transform:uppercase;letter-spacing:0.04em;font-weight:500`;
-        const valStyle = `font-size:12px;color:${tipPaint.foreground}`;
-        const rowStyle = `display:flex;justify-content:space-between;align-items:baseline;gap:12px`;
-
-        // Type badge + link count
-        let html = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">`;
-        html += `<span style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:${nodeColor};background:${nodeColor}18;padding:2px 8px;border-radius:6px">${factType}</span>`;
-        html += `<span style="font-size:12px;color:${muted}">${linkCount} link${linkCount !== 1 ? "s" : ""}</span>`;
-        html += `</div>`;
-
-        // Text
-        html += `<div style="font-size:12px;line-height:1.6;margin-bottom:8px">${fullText}</div>`;
-
-        // Metadata grid
-        html += `<div style="display:flex;flex-direction:column;gap:4px;border-top:1px solid ${tipPaint.border};padding-top:8px">`;
-
-        if (context) {
-          html += `<div style="${rowStyle}"><span style="${labelStyle}">Context</span><span style="${valStyle}">${context}</span></div>`;
-        }
-
-        // Format ISO timestamp as "YYYY-MM-DD HH:MM" — keeps the row compact
-        // while still surfacing the time-of-day the user asked for.
-        const fmtTs = (iso: string) => iso.slice(0, 16).replace("T", " ");
-
-        if (occurredStart) {
-          const start = fmtTs(occurredStart);
-          const end = occurredEnd ? fmtTs(occurredEnd) : null;
-          const occurredDisplay = end && end !== start ? `${start} → ${end}` : start;
-          html += `<div style="${rowStyle}"><span style="${labelStyle}">Occurred</span><span style="${valStyle}">${occurredDisplay}</span></div>`;
-        }
-
-        if (mentionedAt) {
-          html += `<div style="${rowStyle}"><span style="${labelStyle}">Mentioned</span><span style="${valStyle}">${fmtTs(mentionedAt)}</span></div>`;
-        }
-
-        if (proofCount && proofCount > 1) {
-          html += `<div style="${rowStyle}"><span style="${labelStyle}">Evidence</span><span style="${valStyle}">${proofCount} sources</span></div>`;
-        }
-
-        if (documentId) {
-          html += `<div style="${rowStyle}"><span style="${labelStyle}">Document</span><span style="font-size:12px;font-family:monospace;color:${muted}">${String(documentId).slice(0, 12)}...</span></div>`;
-        }
-
-        html += `</div>`;
-
-        // Entities
-        if (entities.length > 0 && !(entities.length === 1 && entities[0] === "None")) {
-          html += `<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px">`;
-          for (const ent of entities) {
-            html += `<span style="font-size:12px;background:${tipPaint.chip};color:${tipPaint.chipText};padding:2px 7px;border-radius:6px">${ent}</span>`;
-          }
-          html += `</div>`;
-        }
-
-        // Tags
-        if (tags.length > 0) {
-          html += `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">`;
-          for (const tag of tags) {
-            html += `<span style="font-size:12px;background:${nodeColor}15;color:${nodeColor};padding:2px 7px;border-radius:6px">#${tag}</span>`;
-          }
-          html += `</div>`;
-        }
-
-        // ID
-        html += `<div style="margin-top:8px;font-size:12px;font-family:monospace;color:${dimmed}">${node.id}</div>`;
-
-        tip.innerHTML = html;
+        tip.innerHTML = tooltipHtml(
+          node,
+          preparedNodes[idx].heatColor,
+          preparedNodes[idx].linkCount,
+          isDark
+        );
       }
 
       tip.style.display = "block";
@@ -1724,8 +1863,10 @@ function NetworkConstellation({
       parts.push(`<rect width="${W}" height="${H}" fill="url(#hs-glow)"/>`);
 
       // --- Links: exactly as the UI canvas draws them in the no-hover state
-      // (thin 0.4px colored quadratic curves at a faint, zoom-derived alpha) ---
+      // (thin 0.4px colored quadratic curves at a faint, zoom-derived alpha; links
+      // between clusters as 0.8px bridges at 0.2) ---
       const linkParts: string[] = [];
+      const bridgeParts: string[] = [];
       const maxLinks = 6000;
       let drawn = 0;
       for (const link of linksWithIndices) {
@@ -1736,7 +1877,7 @@ function NetworkConstellation({
         const byp = sy[link.b];
         const midX = (axp + bxp) / 2 + (byp - ayp) * 0.08;
         const midY = (ayp + byp) / 2 - (bxp - axp) * 0.08;
-        linkParts.push(
+        (link.bridge ? bridgeParts : linkParts).push(
           `<path d="M${f(axp)} ${f(ayp)} Q${f(midX)} ${f(midY)} ${f(bxp)} ${f(byp)}" stroke="${link.color}"/>`
         );
         drawn++;
@@ -1745,6 +1886,7 @@ function NetworkConstellation({
       parts.push(
         `<g fill="none" stroke-width="0.4" opacity="${a(linkAlpha)}">${linkParts.join("")}</g>`
       );
+      parts.push(`<g fill="none" stroke-width="0.8" opacity="0.2">${bridgeParts.join("")}</g>`);
 
       // --- Nodes: exactly as the UI canvas draws them (solid heat dot, opacity
       // by link count, plus a translucent halo for hubs) — minus hover effects ---
