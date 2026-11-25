@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { ArrowRight, Search } from "lucide-react";
-import { client, type KnowledgeNode } from "@/lib/api";
+import { client, type PageNode } from "@/lib/api";
 import { bankRoute } from "@/lib/bank-url";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { cn } from "@/lib/utils";
@@ -52,7 +52,7 @@ interface ModelRow {
   } | null;
 }
 
-function countPages(nodes: KnowledgeNode[]): number {
+function countPages(nodes: PageNode[]): number {
   let count = 0;
   for (const node of nodes) {
     if (node.kind === "page") count += 1;
@@ -99,10 +99,10 @@ export function HomeDesk({
     let cancelled = false;
     Promise.allSettled([
       client.getBankStats(bankId),
-      client.getKnowledgeTree(bankId),
+      client.getPageTree(bankId),
       client.listMentalModels(bankId, {
         detail: "metadata",
-        excludeKnowledgePages: true,
+        excludePages: true,
         limit: 6,
       }),
     ]).then(([stats, tree, modelsResult]) => {
@@ -120,7 +120,7 @@ export function HomeDesk({
         });
       }
       if (tree.status === "fulfilled") {
-        const roots = (tree.value as { roots?: KnowledgeNode[] }).roots ?? [];
+        const roots = (tree.value as { roots?: PageNode[] }).roots ?? [];
         setPages(countPages(roots));
       } else {
         setPages(0);
@@ -296,7 +296,7 @@ export function HomeDesk({
         <CountCard
           label={t("statPages")}
           value={formatCount(pages)}
-          onClick={() => onNavigate("knowledge")}
+          onClick={() => onNavigate("pages")}
         />
         <CountCard
           label={copy.links}

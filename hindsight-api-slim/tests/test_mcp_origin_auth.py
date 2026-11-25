@@ -133,6 +133,7 @@ async def test_reflect_and_retain_run_only_after_origin_auth_and_stay_on_that_ba
     memory = MagicMock()
     memory._tenant_extension = extension
     memory.resolve_bank_alias = AsyncMock(side_effect=lambda bank_id, **_: bank_id)
+    memory.refuse_knowledge_bank = AsyncMock(return_value=None)
     memory.submit_async_reflect = AsyncMock(return_value={"operation_id": "op-reflect"})
     memory.submit_async_retain = AsyncMock(return_value={"operation_id": "op-retain"})
 

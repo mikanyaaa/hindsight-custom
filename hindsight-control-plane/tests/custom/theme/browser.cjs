@@ -69,7 +69,7 @@ const assert = require("node:assert/strict");
             data: { source: String(i % 40), target: String((i * 7 + 3) % 40) },
           })),
         };
-      else if (p === "/api/knowledge-base/tree")
+      else if (p === "/api/pages/tree")
         data = {
           roots: [
             {
@@ -92,7 +92,7 @@ const assert = require("node:assert/strict");
             },
           ],
         };
-      else if (p.startsWith("/api/knowledge-base/pages/"))
+      else if (p.startsWith("/api/pages/") && p !== "/api/pages/tree")
         data = {
           id: p.split("/").pop(),
           name: "Research notes",
@@ -169,7 +169,7 @@ const assert = require("node:assert/strict");
     await page.keyboard.press("Escape");
     for (const view of [
       "data",
-      "knowledge",
+      "pages",
       "recall",
       "reflect",
       "documents",

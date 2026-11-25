@@ -22,7 +22,7 @@ const PAGES = [
   { id: "login", path: "/en/login", ready: "Enter your access key to continue", frame: false },
   { id: "home", path: "/en/banks/beispiel?view=home", ready: "New in the last 7 days", frame: true },
   { id: "data", path: "/en/banks/beispiel?view=data", ready: "total memories", frame: true },
-  { id: "knowledge", path: "/en/banks/beispiel?view=knowledge", ready: "Beispiel page", frame: true },
+  { id: "pages", path: "/en/banks/beispiel?view=pages", ready: "Beispiel page", frame: true },
   { id: "recall", path: "/en/banks/beispiel?view=recall", ready: "Ready to Recall", frame: true },
   { id: "reflect", path: "/en/banks/beispiel?view=reflect", ready: "Ready to Reflect", frame: true },
   { id: "documents", path: "/en/banks/beispiel?view=documents", ready: "beispiel-note", frame: true },
@@ -144,7 +144,7 @@ function mockBody(pathname) {
       limit: 100,
     };
   }
-  if (pathname.includes("/knowledge-base/pages/")) {
+  if (pathname.startsWith("/api/pages/") && !pathname.endsWith("/tree")) {
     return {
       id: "page-1",
       name: "Beispiel page",
@@ -156,7 +156,7 @@ function mockBody(pathname) {
       markdown: "Fictional page body.",
     };
   }
-  if (pathname.includes("/knowledge-base/tree")) {
+  if (pathname.endsWith("/api/pages/tree") || pathname.endsWith("/pages/tree")) {
     return {
       roots: [
         {

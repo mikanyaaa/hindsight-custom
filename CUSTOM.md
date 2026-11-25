@@ -21,9 +21,15 @@ unset local defaults at build time; that cache does not override the environment
 at runtime. Do not switch an already configured embedding or reranker model to
 one of those defaults.
 
-The vector width default remains 384. v1.2.0 does not add an Alembic revision
-after `c7e2f9a4d1b8`, which is also the v1.1.0 head, so a database already at
-that revision gets no further schema changes from this upgrade.
+The vector width default remains 384. v1.3.0 adds Alembic revisions after
+`c7e2f9a4d1b8`. They add `banks.kind` (existing rows stay `memory`), the
+knowledge-bank tables, a graph-maintenance claim timestamp, an attachment
+discovery routine, and Oracle foreign-key indexes. Startup applies them. A
+knowledge-bank embedding column is pinned to the configured knowledge embedder
+on first use; if passages already exist at a different width, startup refuses
+rather than rewriting them. Do not switch an already configured memory embedding
+or reranker model to a built-in default: a dimension mismatch can still alter
+the memory vector column at startup.
 
 UI login remains the control-plane access key (`HINDSIGHT_CP_ACCESS_KEY`).
 Authenticated MCP keeps the existing order: `HINDSIGHT_API_MCP_AUTH_TOKEN` when
@@ -259,7 +265,7 @@ app locale. Session expiry and request timeouts render in `src/custom/`.
 | `src/lib/relative-time.ts` | `relative-time-locale` | Locale-aware relative time; invalid input renders a dash. |
 | `src/lib/use-refresh-attempts.ts` | `visible-poll-attempts` | Pause attempt polling while the tab is hidden. |
 | `src/components/documents-view.tsx` | `visible-poll-documents`, `relative-time-documents` | Visible-tab document refresh and locale timestamps. |
-| `src/components/knowledge-base-view.tsx` | `visible-poll-knowledge`, `relative-time-knowledge` | Visible-tab knowledge refresh and locale timestamps. |
+| `src/components/pages-view.tsx` | `visible-poll-knowledge`, `relative-time-knowledge` | Visible-tab page refresh and locale timestamps. |
 | `src/components/bank-operations-view.tsx` | `visible-poll-operations` | Visible-tab operations refresh. |
 | `src/components/bank-profile-view.tsx` | `visible-poll-profile` | Visible-tab profile refresh. |
 | `src/components/bank-stats-view.tsx` | `visible-poll-stats`, `visible-poll-timeseries`, `relative-time-stats` | Visible-tab stats refresh and locale timestamps. |

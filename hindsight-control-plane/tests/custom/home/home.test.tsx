@@ -56,7 +56,7 @@ vi.mock("@/components/memory-detail-modal", () => ({
 vi.mock("@/lib/api", () => ({
   client: {
     getBankStats: async () => ({ total_nodes: 14, total_documents: 4, total_links: 13 }),
-    getKnowledgeTree: async () => ({ roots: [{ id: "p1", kind: "page", children: [] }] }),
+    getPageTree: async () => ({ roots: [{ id: "p1", kind: "page", children: [] }] }),
     listMemories,
     listMentalModels: async () => ({
       items: [
