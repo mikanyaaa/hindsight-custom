@@ -79,6 +79,7 @@ def canonical_tool_names(names: Iterable[str]) -> set[str]:
 _ALL_TOOLS: frozenset[str] = frozenset(
     {
         "retain",
+        "retain_image",
         "sync_retain",
         "recall",
         "reflect",
@@ -927,6 +928,11 @@ def register_mcp_tools(
 
     if "sync_retain" in tools_to_register:
         _register_sync_retain(mcp, memory, config)
+
+    if "retain_image" in tools_to_register:
+        from .image_retain import _register_retain_image
+
+        _register_retain_image(mcp, memory, config)
 
     if "recall" in tools_to_register:
         _register_recall(mcp, memory, config)

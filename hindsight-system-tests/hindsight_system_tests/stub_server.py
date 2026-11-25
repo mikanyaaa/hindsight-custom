@@ -80,6 +80,27 @@ def _schema_tool_turn(body: dict[str, Any]) -> SchemaToolTurn | None:
     return None
 
 
+@dataclass(frozen=True)
+class RecordedTemperature:
+    """Whether a chat body sent ``temperature``, and the number when it was one.
+
+    Omitting the field is how a caller asks a model that rejects the parameter
+    to run. A present field of any other shape still counts as sent.
+    """
+
+    sent: bool
+    value: float | None
+
+
+def _recorded_temperature(body: dict[str, Any]) -> RecordedTemperature:
+    if "temperature" not in body:
+        return RecordedTemperature(sent=False, value=None)
+    raw = body["temperature"]
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+        return RecordedTemperature(sent=True, value=None)
+    return RecordedTemperature(sent=True, value=float(raw))
+
+
 def create_stub_app(stubs: Stubs) -> FastAPI:
     app = FastAPI(title="Hindsight system-test provider stub")
 
@@ -98,6 +119,7 @@ def create_stub_app(stubs: Stubs) -> FastAPI:
         validate_chat(body)
 
         turn = _schema_tool_turn(body)
+        recorded_temperature = _recorded_temperature(body)
         chat_request = ChatRequest(
             model=body["model"],
             messages=body["messages"],
@@ -105,6 +127,8 @@ def create_stub_app(stubs: Stubs) -> FastAPI:
             tools=turn.tools if turn else (),
             api_key=request.headers.get("authorization", "").removeprefix("Bearer ") or None,
             headers={k.lower(): v for k, v in request.headers.items()},
+            temperature=recorded_temperature.value,
+            temperature_sent=recorded_temperature.sent,
         )
 
         reply = stubs.llm.resolve(chat_request)
@@ -185,12 +209,15 @@ def create_stub_app(stubs: Stubs) -> FastAPI:
         system = body.get("system")
         prefix = [{"role": "system", "content": system}] if system else []
         authorization = request.headers.get("authorization", "")
+        recorded_temperature = _recorded_temperature(body)
         chat_request = ChatRequest(
             model=body["model"],
             messages=[*prefix, *body["messages"]],
             tools=tuple(tool["name"] for tool in body.get("tools") or []),
             api_key=authorization.removeprefix("Bearer ") or request.headers.get("x-api-key"),
             headers={k.lower(): v for k, v in request.headers.items()},
+            temperature=recorded_temperature.value,
+            temperature_sent=recorded_temperature.sent,
         )
 
         reply = stubs.llm.resolve(chat_request)

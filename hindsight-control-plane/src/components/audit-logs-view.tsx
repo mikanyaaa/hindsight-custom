@@ -37,6 +37,7 @@ function getActionOptions(t: TranslateFn) {
   return [
     { value: "all", label: t("actionAll") },
     { value: "retain", label: t("actionRetain") },
+    { value: "retain_image", label: t("actionRetainImage") },
     { value: "batch_retain", label: t("actionBatchRetain") },
     { value: "file_retain", label: t("actionFileRetain") },
     { value: "file_convert_retain", label: t("actionFileConvertRetain") },

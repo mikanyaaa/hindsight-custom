@@ -1474,6 +1474,7 @@
     "chartNoData": "此时段内无数据",
     "actionAll": "所有操作",
     "actionRetain": "保留",
+    "actionRetainImage": "保留图片",
     "actionRecall": "召回",
     "actionReflect": "反思",
     "actionCreateBank": "创建库",

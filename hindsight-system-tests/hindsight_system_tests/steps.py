@@ -51,6 +51,8 @@ STEP_ANCHORS: dict[str, str] = {
     # The same refresh's other edit, run first: removing what rests on deleted memories.
     "mental_model_retraction": "You are removing *retracted information* from an existing structured document.",
     "connection_probe": "Say 'ok'",
+    # retain_image's description call, before fact extraction sees the prose.
+    "describe_image": "Describe each image faithfully for later fact extraction.",
 }
 
 

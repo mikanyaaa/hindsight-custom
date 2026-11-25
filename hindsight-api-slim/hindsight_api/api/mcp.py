@@ -166,6 +166,7 @@ def create_mcp_server(memory: MemoryEngine, multi_bank: bool = True, knowledge_b
     _SINGLE_BANK_TOOLS: frozenset[str] = frozenset(
         {
             "retain",
+            "retain_image",
             "sync_retain",
             "recall",
             "reflect",

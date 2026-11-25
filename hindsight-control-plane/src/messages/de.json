@@ -1474,6 +1474,7 @@
     "chartNoData": "Keine Daten für diesen Zeitraum",
     "actionAll": "Alle Aktionen",
     "actionRetain": "Retain",
+    "actionRetainImage": "Retain image",
     "actionRecall": "Recall",
     "actionReflect": "Reflect",
     "actionCreateBank": "Bank erstellen",

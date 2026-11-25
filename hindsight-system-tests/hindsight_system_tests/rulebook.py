@@ -44,6 +44,10 @@ class ChatRequest:
     call is billed to."""
     headers: dict[str, str] = field(default_factory=dict, compare=False)
     """The request headers, lowercased."""
+    temperature: float | None = None
+    """The sampling temperature, when the request included one."""
+    temperature_sent: bool = False
+    """Whether the JSON body had a temperature field. Absence is the omit case."""
 
     @property
     def user_text(self) -> str:

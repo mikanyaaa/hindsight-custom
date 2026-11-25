@@ -1474,6 +1474,7 @@
     "chartNoData": "この期間のデータはありません",
     "actionAll": "すべてのアクション",
     "actionRetain": "Retain",
+    "actionRetainImage": "Retain image",
     "actionRecall": "Recall",
     "actionReflect": "Reflect",
     "actionCreateBank": "バンクを作成",

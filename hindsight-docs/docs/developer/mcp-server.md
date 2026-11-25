@@ -140,7 +140,7 @@ MCP clients that read tool annotations also receive safety hints from the built-
 - Read-only operations such as `recall`, `reflect`, `list_*`, and `get_*` are marked with `readOnlyHint: true`.
 - Delete, clear, and invalidate operations are marked with `destructiveHint: true`.
 - `openWorldHint` is `false` for the built-in tools because Hindsight operates on its configured memory store rather than the open internet.
-- Write operations such as `retain`, `create_*`, `update_*`, `refresh_mental_model`, and `cancel_operation` are not marked destructive.
+- Write operations such as `retain`, `retain_image`, `create_*`, `update_*`, `refresh_mental_model`, and `cancel_operation` are not marked destructive.
 
 ---
 
@@ -176,6 +176,44 @@ Store information to long-term memory.
 - Important events or milestones are mentioned
 - Decisions, opinions, or goals are stated
 - Work context or project details are discussed
+
+---
+
+### retain_image
+
+Store one or more images. A vision model describes each image, then fact extraction runs on that description with the retain model — the same model and temperature `retain` uses for text. The description call has its own model and temperature (`HINDSIGHT_API_IMAGE_RETAIN_LLM_*`), so a vision model that rejects `temperature` does not force text retain to omit it.
+
+Like `retain`, the tool returns as soon as the work is queued: `{"status": "accepted", "operation_id": "..."}`. Non-images are rejected.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `images` | list[object] | Yes | One or more images. Each has `media_type` (or `mime_type`) and `data` (base64) and/or `url` (http or https). `image/*` only |
+| `context` | string | No | Category for the memory (default: `general`) |
+| `caption` | string | No | Optional text stored with the description |
+| `timestamp` | string | No | ISO 8601 timestamp for when the event occurred |
+| `tags` | list[string] | No | Tags for organizing and filtering this memory |
+| `metadata` | object | No | Key-value metadata to attach |
+| `document_id` | string | No | Associate this memory with a document |
+| `strategy` | string | No | Optional named retain strategy |
+| `update_mode` | string | No | `replace` (default) or `append` when `document_id` already exists |
+
+On a bank-scoped endpoint the bank comes from the URL. On the multi-bank endpoint, pass `bank_id`.
+
+**Example:**
+```json
+{
+  "name": "retain_image",
+  "arguments": {
+    "images": [
+      {"media_type": "image/png", "data": "<base64>"}
+    ],
+    "caption": "Whiteboard from the planning meeting",
+    "tags": ["meeting"]
+  }
+}
+```
+
+Listing `retain` in a tool allowlist does not enable `retain_image`. Name `retain_image` itself.
 
 ---
 

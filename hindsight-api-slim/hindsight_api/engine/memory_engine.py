@@ -4781,6 +4781,17 @@ class MemoryEngine(MemoryEngineInterface):
             retry_count=task_dict.get("_retry_count", 0),
             operation_id=task_dict.get("_operation_id"),
         )
+        from hindsight_api.image_retain import (
+            ImageRetainRejected,
+            discard_image_retain_blobs,
+            expand_queued_images,
+            queued_image_storage_keys,
+        )
+
+        # retain_image stashes bytes and a marker. An ordinary retain has neither,
+        # and the scan is the only cost. Describing happens before chunking so the
+        # retain model sees prose and its own temperature, not the image.
+        image_keys = queued_image_storage_keys(contents)
         if operation_id and not any(item.get("update_mode") == "append" for item in contents):
             newer = await self._supersede_by_newer_retain_of_same_document(operation_id)
             if newer:
@@ -4797,7 +4808,14 @@ class MemoryEngine(MemoryEngineInterface):
                     f"[BATCH_RETAIN_TASK] Skipping retain {operation_id} for bank_id={bank_id}: "
                     f"retain {newer}, sent after it, already replaced the document"
                 )
+                await discard_image_retain_blobs(self, image_keys)
                 return
+        try:
+            contents = await expand_queued_images(self, contents, bank_id=bank_id)
+        except ImageRetainRejected as exc:
+            # Not retried, so nothing will come back to read the bytes.
+            await discard_image_retain_blobs(self, image_keys)
+            raise InvalidRetainRequestError(str(exc)) from exc
         await self.retain_batch_async(
             bank_id=bank_id,
             contents=contents,
@@ -4830,6 +4848,7 @@ class MemoryEngine(MemoryEngineInterface):
                     f"[BATCH_RETAIN_TASK] No document {doc_id} in bank {bank_id} to record its uploaded file on"
                 )
 
+        await discard_image_retain_blobs(self, image_keys)
         logger.info(f"[BATCH_RETAIN_TASK] Completed background batch retain for bank_id={bank_id}")
 
     async def record_document_file(
