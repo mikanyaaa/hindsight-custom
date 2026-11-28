@@ -20,7 +20,7 @@ const DAY = 24 * 60 * 60 * 1000;
 const PAGES = [
   { id: "banks", path: "/en/dashboard", ready: "Memory banks", frame: false },
   { id: "login", path: "/en/login", ready: "Enter your access key to continue", frame: false },
-  { id: "home", path: "/en/banks/beispiel?view=home", ready: "New in the last 7 days", frame: true },
+  { id: "home", path: "/en/banks/beispiel?view=home", ready: "This week", frame: true },
   { id: "data", path: "/en/banks/beispiel?view=data", ready: "total memories", frame: true },
   { id: "pages", path: "/en/banks/beispiel?view=pages", ready: "Beispiel page", frame: true },
   { id: "recall", path: "/en/banks/beispiel?view=recall", ready: "Ready to Recall", frame: true },
@@ -253,8 +253,8 @@ async function measure(page) {
   return page.evaluate(() => {
     const root = getComputedStyle(document.documentElement);
     const main = document.querySelector("main");
-    const aside = document.querySelector("aside");
-    const tab = document.querySelector('nav[aria-label="Sections"]');
+    const desktopNav = document.querySelector(".atlas-bank-nav");
+    const tab = document.querySelector('nav[aria-label="Sections"]:not(.atlas-bank-nav)');
     const visible = (el) => {
       if (!el) return false;
       const style = getComputedStyle(el);
@@ -289,17 +289,16 @@ async function measure(page) {
       background: root.getPropertyValue("--background").trim(),
       primary: root.getPropertyValue("--primary").trim(),
       mainBlur: main ? getComputedStyle(main).backdropFilter : "none",
-      asideBlur: aside ? getComputedStyle(aside).backdropFilter : "none",
       documentScroll: document.documentElement.scrollWidth,
       mainScroll: main ? main.scrollWidth : 0,
       mainClient: main ? main.clientWidth : 0,
       width: innerWidth,
-      asideVisible: visible(aside),
+      desktopNavVisible: visible(desktopNav),
       tabVisible: visible(tab),
       small,
       fields,
-      recall: document.querySelector("#home-recall")
-        ? Math.round(document.querySelector("#home-recall").getBoundingClientRect().height)
+      recall: document.querySelector('form[role="search"] input')
+        ? Math.round(document.querySelector('form[role="search"] input').getBoundingClientRect().height)
         : null,
     };
   });
@@ -348,13 +347,16 @@ async function measure(page) {
             });
             const scope = view.frame ? page.locator("main") : page.locator("body");
             await scope.getByText(view.ready, { exact: false }).first().waitFor({ timeout: 20000 });
+            if (view.frame) {
+              // The title can render before the bank context resolves on a direct visit.
+              await page.getByRole("navigation", { name: "Sections", exact: true }).waitFor();
+            }
             await page.waitForTimeout(300);
             const shot = await measure(page);
             check(errors.length === 0, `${where} page error: ${errors.join("; ")}`);
-            check(shot.background === (scheme === "dark" ? "#0e0e11" : "#faf9f7"), `${where} background ${shot.background}`);
-            check(shot.primary === (scheme === "dark" ? "#a699ff" : "#5b47d6"), `${where} accent ${shot.primary}`);
+            check(shot.background === (scheme === "dark" ? "#090a0d" : "#faf9f7"), `${where} background ${shot.background}`);
+            check(shot.primary === (scheme === "dark" ? "#78b3ff" : "#5b47d6"), `${where} accent ${shot.primary}`);
             check(shot.mainBlur === "none", `${where} main blur ${shot.mainBlur}`);
-            check(shot.asideBlur === "none", `${where} aside blur ${shot.asideBlur}`);
             check(shot.documentScroll <= shot.width + 1, `${where} document overflow ${shot.documentScroll}`);
             if (shot.mainClient > 0) {
               check(shot.mainScroll <= shot.mainClient + 1, `${where} main overflow ${shot.mainScroll}/${shot.mainClient}`);
@@ -364,8 +366,8 @@ async function measure(page) {
               check(height >= 44, `${where} field is ${height}px`);
             }
             if (view.frame) {
-              check(shot.tabVisible === size.width < 768, `${where} tab bar visible=${shot.tabVisible}`);
-              check(shot.asideVisible === size.width >= 768, `${where} sidebar visible=${shot.asideVisible}`);
+              check(shot.tabVisible === size.width < 1024, `${where} tab bar visible=${shot.tabVisible}`);
+              check(shot.desktopNavVisible === size.width >= 1024, `${where} desktop nav visible=${shot.desktopNavVisible}`);
             }
             if (view.id === "home") check(shot.recall >= 48, `${where} recall field ${shot.recall}`);
             check((await page.getByRole("alertdialog").count()) === 0, `${where} session dialog`);

@@ -1,39 +1,45 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { ArrowRight, Search } from "lucide-react";
-import { client, type PageNode } from "@/lib/api";
-import { bankRoute } from "@/lib/bank-url";
-import { formatRelativeTime } from "@/lib/relative-time";
-import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Constellation } from "@/components/constellation";
-import type { GraphData, GraphLink, GraphNode } from "@/components/graph-data";
+import {
+  ArrowRight,
+  ChevronDown,
+  File,
+  FileText,
+  Layers,
+  Link2,
+  Search,
+  SquareCheckBig,
+  UsersRound,
+  type LucideIcon,
+} from "lucide-react";
 import { MemoryDetailModal } from "@/components/memory-detail-modal";
 import { StalenessBadge } from "@/components/staleness-badge";
-import { HarnessLogo } from "@/components/ui/harness-logo";
-import { cardClass } from "@/custom/primitives/classes";
-import { GRAPH_FACT, GRAPH_NODE } from "@/custom/theme/graph-palette";
-import { homeCopyFor } from "@/custom/home/copy";
+import { convertHindsightGraphData, type GraphData } from "@/components/graph-data";
 import {
-  groupWeek,
-  harnessId,
-  recallQuery,
-  tagLabel,
-  weekWindow,
-  type TagGroup,
-  type WeekMemory,
-} from "@/custom/home/activity";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { HarnessLogo } from "@/components/ui/harness-logo";
+import { AtlasMap } from "@/custom/atlas-map/atlas-map";
+import { analyzeAtlas } from "@/custom/atlas-map/layout";
+import { client, type PageNode } from "@/lib/api";
+import { useBank } from "@/lib/bank-context";
+import { bankRoute } from "@/lib/bank-url";
+import { formatRelativeTime } from "@/lib/relative-time";
+import { groupWeek, harnessId, recallQuery, tagLabel, weekWindow } from "./activity";
+import { homeCopyFor } from "./copy";
+import styles from "./home-desk.module.css";
 
-const TYPE_COLORS: Record<string, string> = { ...GRAPH_FACT };
-// The home map is a card, not the explorer. Fewer nodes keeps the request
-// small and the drawing inside a short canvas.
-const GRAPH_NODE_CAP = 80;
-const GRAPH_HEIGHT = 300;
+// The map previews the bank; the explorer can load a larger set on demand.
+const GRAPH_NODE_CAP = 150;
 const WEEK_LIMIT = 100;
+const WEEK_PREVIEW = 3;
 
 interface Counts {
   memories: number;
@@ -41,15 +47,13 @@ interface Counts {
   links: number;
 }
 
-interface ModelRow {
-  id: string;
-  name: string;
-  is_stale: boolean | null;
-  last_refresh_failed_at?: string | null;
-  trigger?: {
-    refresh_after_consolidation?: boolean;
-    refresh_cron?: string | null;
-  } | null;
+type ModelRow = Awaited<ReturnType<typeof client.listMentalModels>>["items"][number];
+type WeekPage = Awaited<ReturnType<typeof client.listMemories>>;
+type WeekItem = WeekPage["items"][number];
+
+interface WeekResult {
+  tag: string;
+  page: WeekPage | null;
 }
 
 function countPages(nodes: PageNode[]): number {
@@ -61,54 +65,45 @@ function countPages(nodes: PageNode[]): number {
   return count;
 }
 
-function asWeek(item: { id: string; text: string; tags?: string[]; date?: string }): WeekMemory {
-  return {
-    id: item.id,
-    text: item.text,
-    tags: item.tags ?? [],
-    at: item.date ?? "",
-  };
-}
-
-export function HomeDesk({
-  bankId,
-  onNavigate,
-}: {
+interface HomeProps {
   bankId: string;
   onNavigate: (tab: string) => void;
-}) {
+}
+
+export function HomeDesk(props: HomeProps) {
+  // Bank switches can keep this route mounted. Drop the old bank's requests and view state together.
+  return <BankHome key={props.bankId} {...props} />;
+}
+
+function BankHome({ bankId, onNavigate }: HomeProps) {
   const t = useTranslations("home");
+  const common = useTranslations("common");
+  const data = useTranslations("dataView");
   // CUSTOM-HOOK: relative-time-home begin
   const locale = useLocale();
   // CUSTOM-HOOK: relative-time-home end
   const copy = homeCopyFor(locale);
+  const { currentBank, currentBankName } = useBank();
+  const bankName = (currentBank === bankId && currentBankName) || bankId;
   const router = useRouter();
+  const activityId = useId();
   const [ask, setAsk] = useState("");
-  const [counts, setCounts] = useState<Counts | null>(null);
-  const [pages, setPages] = useState<number | null>(null);
-  const [models, setModels] = useState<ModelRow[] | null>(null);
-  const [tag, setTag] = useState<string | null>(null);
-  const [week, setWeek] = useState<WeekMemory[]>([]);
-  const [weekTotal, setWeekTotal] = useState(0);
-  const [weekLoading, setWeekLoading] = useState(true);
-  const [graph, setGraph] = useState<GraphData>({ nodes: [], links: [] });
-  const [graphReady, setGraphReady] = useState(false);
+  const [counts, setCounts] = useState<Counts | null>();
+  const [pages, setPages] = useState<number | null>();
+  const [models, setModels] = useState<ModelRow[] | null>();
+  const [tag, setTag] = useState("");
+  const [weekOverview, setWeekOverview] = useState<WeekItem[]>([]);
+  const [weekResult, setWeekResult] = useState<WeekResult>();
+  const [weekExpanded, setWeekExpanded] = useState(false);
+  const [graph, setGraph] = useState<GraphData | null>();
   const [openMemory, setOpenMemory] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    Promise.allSettled([
-      client.getBankStats(bankId),
-      client.getPageTree(bankId),
-      client.listMentalModels(bankId, {
-        detail: "metadata",
-        excludePages: true,
-        limit: 6,
-      }),
-    ]).then(([stats, tree, modelsResult]) => {
-      if (cancelled) return;
-      if (stats.status === "fulfilled") {
-        const value = stats.value as {
+    client.getBankStats(bankId).then(
+      (stats) => {
+        if (cancelled) return;
+        const value = stats as {
           total_nodes?: number;
           total_documents?: number;
           total_links?: number;
@@ -118,20 +113,27 @@ export function HomeDesk({
           documents: value.total_documents ?? 0,
           links: value.total_links ?? 0,
         });
+      },
+      () => {
+        if (!cancelled) setCounts(null);
       }
-      if (tree.status === "fulfilled") {
-        const roots = (tree.value as { roots?: PageNode[] }).roots ?? [];
-        setPages(countPages(roots));
-      } else {
-        setPages(0);
+    );
+    client.getPageTree(bankId).then(
+      (tree) => {
+        if (!cancelled) setPages(countPages(tree.roots ?? []));
+      },
+      () => {
+        if (!cancelled) setPages(null);
       }
-      if (modelsResult.status === "fulfilled") {
-        const items = (modelsResult.value as { items?: ModelRow[] }).items ?? [];
-        setModels(items);
-      } else {
-        setModels([]);
+    );
+    client.listMentalModels(bankId, { detail: "metadata", excludePages: true, limit: 6 }).then(
+      ({ items }) => {
+        if (!cancelled) setModels(items ?? []);
+      },
+      () => {
+        if (!cancelled) setModels(null);
       }
-    });
+    );
     return () => {
       cancelled = true;
     };
@@ -139,7 +141,6 @@ export function HomeDesk({
 
   useEffect(() => {
     let cancelled = false;
-    setWeekLoading(true);
     const span = weekWindow(new Date());
     client
       .listMemories(bankId, {
@@ -147,284 +148,268 @@ export function HomeDesk({
         startDate: span.start,
         endDate: span.end,
         tags: tag ? [tag] : undefined,
-        tagsMatch: "any",
+        // A selection must exclude untagged memories from both the list and its total.
+        tagsMatch: tag ? "any_strict" : "any",
         limit: WEEK_LIMIT,
       })
-      .then((page) => {
-        if (cancelled) return;
-        setWeek((page.items ?? []).map(asWeek));
-        setWeekTotal(page.total ?? 0);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setWeek([]);
-          setWeekTotal(0);
+      .then(
+        (page) => {
+          if (cancelled) return;
+          if (!tag) setWeekOverview(page.items ?? []);
+          setWeekResult({ tag, page });
+        },
+        () => {
+          if (!cancelled) setWeekResult({ tag, page: null });
         }
-      })
-      .finally(() => {
-        if (!cancelled) setWeekLoading(false);
-      });
+      );
     return () => {
       cancelled = true;
     };
   }, [bankId, tag]);
 
   useEffect(() => {
-    let cancelled = false;
-    setGraphReady(false);
+    const controller = new AbortController();
     client
-      .getGraph({ bank_id: bankId, limit: GRAPH_NODE_CAP })
+      .getGraph({ bank_id: bankId, limit: GRAPH_NODE_CAP }, controller.signal)
       .then((raw) => {
-        if (cancelled) return;
-        const body = raw as { nodes?: unknown[]; edges?: unknown[] };
-        const nodes: GraphNode[] = (body.nodes ?? []).map((rawNode) => {
-          const data =
-            (rawNode as { data?: Record<string, unknown> }).data ??
-            (rawNode as Record<string, unknown>);
-          return {
-            id: String(data.id),
-            label: typeof data.label === "string" ? data.label : undefined,
-            group: typeof data.type === "string" ? data.type : undefined,
-          };
-        });
-        const links: GraphLink[] = (body.edges ?? []).map((rawEdge) => {
-          const data =
-            (rawEdge as { data?: Record<string, unknown> }).data ??
-            (rawEdge as Record<string, unknown>);
-          return {
-            source: String(data.source),
-            target: String(data.target),
-            weight: typeof data.weight === "number" ? data.weight : undefined,
-          };
-        });
-        setGraph({ nodes, links });
+        if (!controller.signal.aborted) {
+          setGraph(
+            convertHindsightGraphData(raw as Parameters<typeof convertHindsightGraphData>[0])
+          );
+        }
       })
       .catch(() => {
-        if (!cancelled) setGraph({ nodes: [], links: [] });
-      })
-      .finally(() => {
-        if (!cancelled) setGraphReady(true);
+        if (!controller.signal.aborted) setGraph(null);
       });
-    return () => {
-      cancelled = true;
-    };
+    return () => controller.abort();
   }, [bankId]);
 
-  const groups = useMemo(() => {
-    const grouped = groupWeek(week, tag);
-    if (!tag) return grouped;
-    return grouped.map((group) => (group.tag === tag ? { ...group, count: weekTotal } : group));
-  }, [week, tag, weekTotal]);
-
-  const chips = useMemo(() => {
-    const names = new Set<string>();
-    for (const item of week) {
-      for (const value of item.tags) if (value) names.add(value);
-    }
-    if (tag) names.add(tag);
-    return [...names].sort((a, b) => {
-      const rank = (value: string) => (value.startsWith("harness:") ? 0 : 1);
-      return rank(a) - rank(b) || a.localeCompare(b);
-    });
-  }, [week, tag]);
-
-  const nodeWeights = useMemo(() => {
-    const weights = new Map<string, number>();
-    for (const link of graph.links) {
-      const value = typeof link.weight === "number" && link.weight > 0 ? link.weight : 1;
-      weights.set(link.source, (weights.get(link.source) ?? 0) + value);
-      weights.set(link.target, (weights.get(link.target) ?? 0) + value);
-    }
-    return weights;
-  }, [graph]);
-  const maxWeight = useMemo(() => Math.max(1, ...nodeWeights.values()), [nodeWeights]);
-  const nodeSizeFn = useCallback(
-    (node: GraphNode) => 4 + Math.sqrt((nodeWeights.get(node.id) ?? 0) / maxWeight) * 9,
-    [nodeWeights, maxWeight]
+  // Derive the filter choices from the unfiltered window so switching tags cannot hide other choices.
+  const tags = useMemo(
+    () =>
+      groupWeek(
+        weekOverview.map((item) => ({
+          id: item.id,
+          text: item.text,
+          tags: item.tags ?? [],
+          at: item.date,
+        })),
+        null
+      ).filter((group) => group.tag),
+    [weekOverview]
   );
+  const dayFormat = useMemo(
+    () => new Intl.DateTimeFormat(locale, { month: "short", day: "numeric" }),
+    [locale]
+  );
+  const map = useMemo(() => (graph ? analyzeAtlas(graph) : null), [graph]);
+  const page = weekResult?.tag === tag ? weekResult.page : undefined;
+  const week = page?.items ?? [];
+  const weekTotal = page?.total ?? 0;
+  const formatCount = (value?: number | null) => value?.toLocaleString(locale) ?? "—";
 
-  const formatCount = (value: number | null) =>
-    value === null ? "—" : value.toLocaleString(locale);
-
-  const askBank = (event: FormEvent) => {
+  const askBank = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const query = ask.trim();
-    if (!query) return;
-    router.push(bankRoute(bankId, recallQuery(query)));
+    if (query) router.push(bankRoute(bankId, recallQuery(query)));
   };
 
-  const openModels = () => router.push(bankRoute(bankId, "?view=knowledge&knowledgeTab=models"));
+  const openModels = () => router.push(bankRoute(bankId, "?view=pages&pagesTab=models"));
 
   return (
-    <div>
-      <h1 className="mb-2 text-3xl font-bold text-foreground">{t("title")}</h1>
-      <p className="mb-4 text-muted-foreground">
-        {t("subtitle")} <span className="font-mono text-foreground">{bankId}</span>
-      </p>
-
-      <form onSubmit={askBank} className="mb-4 flex items-center gap-2">
-        <div className="relative min-w-0 flex-1">
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden
-          />
-          <Input
-            id="home-recall"
+    <div className={styles.home}>
+      <div className={styles.heading}>
+        <h1>{bankName}</h1>
+        <form role="search" onSubmit={askBank} className={styles.search}>
+          <button type="submit" aria-label={copy.searchSubmit} disabled={!ask.trim()}>
+            <Search aria-hidden />
+          </button>
+          <input
+            type="text"
+            enterKeyHint="search"
             value={ask}
             onChange={(event) => setAsk(event.target.value)}
             placeholder={copy.searchPlaceholder}
             aria-label={copy.searchLabel}
-            className="h-12 min-h-12 pl-10 text-base"
           />
-        </div>
-        <Button type="submit" className="h-12 min-h-12 shrink-0 px-4" disabled={!ask.trim()}>
-          {copy.searchSubmit}
-        </Button>
-      </form>
-
-      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <CountCard
-          label={t("statMemories")}
-          value={formatCount(counts ? counts.memories : null)}
-          onClick={() => onNavigate("data")}
-        />
-        <CountCard
-          label={t("statDocuments")}
-          value={formatCount(counts ? counts.documents : null)}
-          onClick={() => onNavigate("documents")}
-        />
-        <CountCard
-          label={t("statPages")}
-          value={formatCount(pages)}
-          onClick={() => onNavigate("pages")}
-        />
-        <CountCard
-          label={copy.links}
-          value={formatCount(counts ? counts.links : null)}
-          onClick={() => onNavigate("data")}
-        />
+        </form>
       </div>
 
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-5">
-        <section className={cn(cardClass, "flex min-h-64 flex-col overflow-hidden lg:col-span-3")}>
-          <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-            <h2 className="text-sm font-semibold text-foreground">{copy.weekTitle}</h2>
-            <span className="text-xs tabular-nums text-muted-foreground">
-              {weekLoading ? "—" : weekTotal.toLocaleString(locale)}
-            </span>
+      <AtlasMap
+        model={map}
+        loading={graph === undefined}
+        error={graph === null}
+        onNodeClick={(node) => setOpenMemory(node.id)}
+        onOpenGraph={() => onNavigate("data")}
+      />
+
+      <div className={styles.details}>
+        <div className={styles.metrics} aria-busy={counts === undefined}>
+          <Metric
+            icon={Layers}
+            label={t("statMemories")}
+            value={formatCount(counts?.memories)}
+            onClick={() => onNavigate("data")}
+          />
+          <Metric
+            icon={File}
+            label={t("statDocuments")}
+            value={formatCount(counts?.documents)}
+            onClick={() => onNavigate("documents")}
+          />
+          <Metric
+            icon={Link2}
+            label={copy.links}
+            value={formatCount(counts?.links)}
+            onClick={() => onNavigate("data")}
+          />
+          {counts === null && <p role="status">{common("error")}</p>}
+        </div>
+
+        <section className={styles.activity} aria-labelledby={`${activityId}-heading`}>
+          <header className={styles.sectionHeading}>
+            <h2 id={`${activityId}-heading`}>{copy.weekTitle}</h2>
+            <div className={styles.sectionActions}>
+              {page && weekTotal > 0 && (
+                <span
+                  className={styles.weekCount}
+                  title={data("totalMemories", { count: weekTotal })}
+                >
+                  {formatCount(weekTotal)}
+                </span>
+              )}
+              {tags.length > 0 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger className={styles.filter}>
+                    <span>{tag ? tagLabel(tag, copy.untagged) : copy.weekAll}</span>
+                    <ChevronDown size={16} aria-hidden />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="max-w-[calc(100vw-2rem)]">
+                    <DropdownMenuRadioGroup
+                      value={tag}
+                      onValueChange={(value) => {
+                        setTag(value);
+                        setWeekExpanded(false);
+                      }}
+                    >
+                      <DropdownMenuRadioItem value="">{copy.weekAll}</DropdownMenuRadioItem>
+                      {tags.map((group) => {
+                        const harness = harnessId(group.tag);
+                        return (
+                          <DropdownMenuRadioItem
+                            key={group.tag}
+                            value={group.tag}
+                            className="gap-2"
+                          >
+                            {harness && <HarnessLogo harness={harness} size={16} />}
+                            <span className="min-w-0 flex-1 break-all">
+                              {tagLabel(group.tag, copy.untagged)}
+                            </span>
+                            <span className="text-muted-foreground tabular-nums">
+                              {formatCount(group.count)}
+                            </span>
+                          </DropdownMenuRadioItem>
+                        );
+                      })}
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </div>
           </header>
-          {chips.length > 0 && (
-            <div className="flex flex-wrap gap-2 border-b border-border px-4 py-3">
-              <TagChip pressed={tag === null} onClick={() => setTag(null)} label={copy.weekAll} />
-              {chips.map((name) => (
-                <TagChip
-                  key={name}
-                  pressed={tag === name}
-                  onClick={() => setTag(name)}
-                  label={tagLabel(name, copy.untagged)}
-                  harness={harnessId(name)}
+          {page === undefined && (
+            <p className={styles.status} role="status">
+              {common("loading")}
+            </p>
+          )}
+          {page === null && (
+            <p className={styles.status} role="status">
+              {common("error")}
+            </p>
+          )}
+          {page && week.length === 0 && <p className={styles.status}>{copy.weekEmpty}</p>}
+          {week.length > 0 && (
+            <ul id={activityId} className={styles.activityList}>
+              {(weekExpanded ? week : week.slice(0, WEEK_PREVIEW)).map((item) => (
+                <ActivityRow
+                  key={item.id}
+                  item={item}
+                  tone={map?.toneById.get(item.id)}
+                  locale={locale}
+                  dayFormat={dayFormat}
+                  onOpen={setOpenMemory}
                 />
               ))}
-            </div>
+            </ul>
           )}
-          <div className="min-h-48 flex-1">
-            {weekLoading ? null : groups.length === 0 ? (
-              <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-                {copy.weekEmpty}
-              </p>
-            ) : (
-              <ul className="divide-y divide-border">
-                {groups.map((group) => (
-                  <TagWeek
-                    key={group.tag || "untagged"}
-                    group={group}
-                    locale={locale}
-                    untagged={copy.untagged}
-                    onOpen={setOpenMemory}
-                  />
-                ))}
-              </ul>
-            )}
-            {!weekLoading && week.length < weekTotal && (
-              <p className="px-4 py-2 text-xs text-muted-foreground">{copy.weekLatest}</p>
-            )}
-          </div>
+          {week.length > WEEK_PREVIEW && (
+            <button
+              type="button"
+              aria-controls={activityId}
+              aria-expanded={weekExpanded}
+              className={styles.sectionLink}
+              onClick={() => setWeekExpanded(!weekExpanded)}
+            >
+              {weekExpanded ? copy.weekLess : `${t("viewAll")} (${formatCount(week.length)})`}
+              <ChevronDown
+                size={16}
+                className={weekExpanded ? "rotate-180" : undefined}
+                aria-hidden
+              />
+            </button>
+          )}
+          {weekExpanded && week.length < weekTotal && (
+            <p className={styles.status}>{copy.weekLatest}</p>
+          )}
         </section>
 
-        <div className="flex flex-col gap-4 lg:col-span-2">
-          <section className={cn(cardClass, "flex min-h-40 flex-col overflow-hidden")}>
-            <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-              <h2 className="text-sm font-semibold text-foreground">{copy.modelsTitle}</h2>
-              {models && models.length > 0 && (
-                <button
-                  type="button"
-                  onClick={openModels}
-                  className="inline-flex min-h-11 items-center gap-1 text-xs text-primary"
-                >
-                  {t("viewAll")} <ArrowRight className="h-3 w-3" />
-                </button>
-              )}
-            </header>
-            {models === null ? (
-              <div className="min-h-24" />
-            ) : models.length === 0 ? (
-              <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-                {copy.modelsEmpty}
-              </p>
-            ) : (
-              <ul className="divide-y divide-border">
-                {models.map((model) => (
-                  <li key={model.id}>
-                    <button
-                      type="button"
-                      onClick={openModels}
-                      className="flex min-h-11 w-full items-center justify-between gap-3 px-4 py-2 text-left hover:bg-muted"
-                    >
-                      <span className="truncate text-sm text-foreground">{model.name}</span>
-                      <StalenessBadge
-                        isStale={model.is_stale}
-                        trigger={model.trigger}
-                        refreshFailedAt={model.last_refresh_failed_at}
-                      />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          <section className={cn(cardClass, "overflow-hidden")}>
-            <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-              <h2 className="text-sm font-semibold text-foreground">{t("constellationTitle")}</h2>
+        <section className={styles.models}>
+          <header className={styles.sectionHeading}>
+            <h2>{copy.modelsTitle}</h2>
+            <div className={styles.sectionActions}>
               <button
                 type="button"
-                onClick={() => onNavigate("data")}
-                className="inline-flex min-h-11 items-center gap-1 text-xs text-primary"
+                className={styles.sectionLink}
+                onClick={() => onNavigate("pages")}
               >
-                {t("viewAll")} <ArrowRight className="h-3 w-3" />
+                <FileText size={17} aria-hidden />
+                {t("statPages")} {formatCount(pages)}
               </button>
-            </header>
-            {graph.nodes.length > 0 ? (
-              <Constellation
-                data={graph}
-                height={GRAPH_HEIGHT}
-                controls={false}
-                onNodeClick={(node) => setOpenMemory(node.id)}
-                nodeSizeFn={nodeSizeFn}
-                clusterKeyFn={(node) => node.group ?? null}
-                clusterColorFn={(key) => TYPE_COLORS[key] || GRAPH_NODE}
-                clusterLabelFn={(key) => key}
-              />
-            ) : (
-              <div
-                className="flex items-center justify-center text-sm text-muted-foreground"
-                style={{ height: GRAPH_HEIGHT }}
-              >
-                {graphReady ? t("constellationEmpty") : "—"}
-              </div>
-            )}
-          </section>
-        </div>
+              {models && models.length > 0 && (
+                <button type="button" className={styles.sectionLink} onClick={openModels}>
+                  {t("viewAll")} <ArrowRight size={16} aria-hidden />
+                </button>
+              )}
+            </div>
+          </header>
+          {models === undefined && (
+            <p className={styles.status} role="status">
+              {common("loading")}
+            </p>
+          )}
+          {models === null && (
+            <p className={styles.status} role="status">
+              {common("error")}
+            </p>
+          )}
+          {models?.length === 0 && <p className={styles.status}>{copy.modelsEmpty}</p>}
+          {models && models.length > 0 && (
+            <ul className={styles.modelsList}>
+              {models.map((model) => (
+                <li key={model.id}>
+                  <button type="button" className={styles.modelRow} onClick={openModels}>
+                    <span>{model.name}</span>
+                    <StalenessBadge
+                      isStale={model.is_stale}
+                      trigger={model.trigger}
+                      refreshFailedAt={model.last_refresh_failed_at}
+                    />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       </div>
 
       <MemoryDetailModal memoryId={openMemory} onClose={() => setOpenMemory(null)} />
@@ -432,93 +417,61 @@ export function HomeDesk({
   );
 }
 
-function CountCard({
+function Metric({
+  icon: Icon,
   label,
   value,
   onClick,
 }: {
+  icon: LucideIcon;
   label: string;
   value: string;
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(cardClass, "flex h-24 flex-col justify-between px-4 py-3 text-left")}
-    >
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="text-2xl font-semibold tabular-nums text-foreground">{value}</span>
+    <button type="button" className={styles.metric} onClick={onClick}>
+      <Icon aria-hidden />
+      <strong>{value}</strong>
+      <span>{label}</span>
     </button>
   );
 }
 
-function TagChip({
-  label,
-  harness,
-  pressed,
-  onClick,
-}: {
-  label: string;
-  harness?: string | null;
-  pressed: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={pressed}
-      onClick={onClick}
-      className={cn(
-        "inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm motion-reduce:transition-none",
-        pressed
-          ? "border-primary bg-primary text-primary-foreground"
-          : "border-border bg-card text-foreground"
-      )}
-    >
-      {harness ? <HarnessLogo harness={harness} size={16} /> : null}
-      <span className="max-w-40 truncate">{label}</span>
-    </button>
-  );
-}
-
-function TagWeek({
-  group,
+function ActivityRow({
+  item,
+  tone,
   locale,
-  untagged,
+  dayFormat,
   onOpen,
 }: {
-  group: TagGroup;
+  item: WeekItem;
+  tone?: number;
   locale: string;
-  untagged: string;
+  dayFormat: Intl.DateTimeFormat;
   onOpen: (id: string) => void;
 }) {
-  const mark = harnessId(group.tag);
+  const Icon =
+    item.fact_type === "experience"
+      ? UsersRound
+      : item.fact_type === "observation"
+        ? SquareCheckBig
+        : Search;
+  const date = Date.parse(item.date);
   return (
-    <li className="px-4 py-3">
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <span className="inline-flex min-w-0 items-center gap-2 text-sm font-medium text-foreground">
-          {mark ? <HarnessLogo harness={mark} size={16} /> : null}
-          <span className="truncate">{tagLabel(group.tag, untagged)}</span>
+    <li>
+      <button type="button" className={styles.activityRow} onClick={() => onOpen(item.id)}>
+        <span className={styles.activityIcon} data-tone={tone}>
+          <Icon aria-hidden />
         </span>
-        <span className="text-xs tabular-nums text-muted-foreground">{group.count}</span>
-      </div>
-      <ul className="flex flex-col gap-1">
-        {group.samples.map((item) => (
-          <li key={`${group.tag}-${item.id}`}>
-            <button
-              type="button"
-              onClick={() => onOpen(item.id)}
-              className="flex min-h-11 w-full items-center justify-between gap-3 rounded-md px-2 text-left hover:bg-muted"
-            >
-              <span className="line-clamp-2 text-sm text-foreground">{item.text}</span>
-              <span className="shrink-0 text-xs text-muted-foreground">
-                {formatRelativeTime(item.at, locale)}
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
+        <span className={styles.activityContent}>
+          <span className={styles.activityText}>{item.text}</span>
+          {Number.isFinite(date) && (
+            <time dateTime={item.date} title={formatRelativeTime(item.date, locale)}>
+              {dayFormat.format(date)}
+            </time>
+          )}
+        </span>
+      </button>
     </li>
   );
 }

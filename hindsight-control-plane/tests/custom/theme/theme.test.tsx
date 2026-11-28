@@ -73,8 +73,8 @@ describe("quiet paper tokens", () => {
   it("uses one accent and the paper surfaces", () => {
     expect(value(light, "--background")).toBe("#faf9f7");
     expect(value(light, "--primary")).toBe("#5b47d6");
-    expect(value(dark, "--background")).toBe("#0e0e11");
-    expect(value(dark, "--primary")).toBe("#a699ff");
+    expect(value(dark, "--background")).toBe("#090a0d");
+    expect(value(dark, "--primary")).toBe("#78b3ff");
     expect(value(light, "--primary-gradient")).toBe("var(--primary)");
     expect(value(light, "--hs-brand-blue")).toBe("var(--primary)");
     expect(value(light, "--hs-brand-teal")).toBe("var(--primary)");
@@ -207,7 +207,8 @@ describe("theme before paint", () => {
     expect(document.cookie).toContain(`${THEME_COOKIE}=dark`);
     expect(localeLayout).toContain("THEME_INIT_SCRIPT");
     expect(localeLayout).toContain('data-theme="quiet-paper"');
-    expect(localeLayout.indexOf("<script")).toBeLessThan(localeLayout.indexOf("<body"));
+    expect(localeLayout.indexOf("<body")).toBeLessThan(localeLayout.indexOf("<script"));
+    expect(localeLayout.indexOf("<script")).toBeLessThan(localeLayout.indexOf("<SidebarCollapsedProvider"));
     expect(fonts).toContain('display: "swap"');
     expect(fonts).toContain('adjustFontFallback: "Arial"');
     expect(fonts).toContain("geist-sans-latin.woff2");

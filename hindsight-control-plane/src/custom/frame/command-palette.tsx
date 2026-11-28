@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Search } from "lucide-react";
@@ -19,7 +19,11 @@ import { DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { FRAME_NAV } from "@/custom/frame/nav";
 import { useFrameCopy, useFrameLabel } from "@/custom/frame/labels";
 
-export function CommandPalette() {
+export function CommandPalette({
+  renderTrigger,
+}: {
+  renderTrigger?: (openPalette: (trigger: HTMLElement | null) => void) => ReactNode;
+} = {}) {
   const copy = useFrameCopy();
   const label = useFrameLabel();
   const tNav = useTranslations("nav");
@@ -27,17 +31,26 @@ export function CommandPalette() {
   const { theme, toggleTheme } = useTheme();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [trigger, setTrigger] = useState<HTMLElement | null>(null);
+  const openFrom = useCallback((trigger: HTMLElement | null) => {
+    setTrigger(trigger);
+    setOpen(true);
+  }, []);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key.toLowerCase() !== "k" || event.repeat) return;
       if (!event.metaKey && !event.ctrlKey) return;
       event.preventDefault();
-      setOpen((value) => !value);
+      if (open) {
+        setOpen(false);
+      } else {
+        openFrom(document.activeElement instanceof HTMLElement ? document.activeElement : null);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [open, openFrom]);
 
   const go = (href: string) => {
     setOpen(false);
@@ -46,20 +59,33 @@ export function CommandPalette() {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-keyshortcuts="Control+K Meta+K"
-        aria-label={copy.paletteLabel}
-        className="inline-flex h-11 w-11 shrink-0 items-center justify-center gap-2 rounded-[10px] border border-border bg-card px-0 text-sm text-muted-foreground hover:bg-accent hover:text-foreground sm:w-auto sm:min-w-44 sm:justify-start sm:px-3"
+      {renderTrigger ? (
+        renderTrigger(openFrom)
+      ) : (
+        <button
+          type="button"
+          onClick={(event) => openFrom(event.currentTarget)}
+          aria-keyshortcuts="Control+K Meta+K"
+          aria-label={copy.paletteLabel}
+          className="inline-flex h-11 w-11 shrink-0 items-center justify-center gap-2 rounded-[10px] border border-border bg-card px-0 text-sm text-muted-foreground hover:bg-accent hover:text-foreground sm:w-auto sm:min-w-44 sm:justify-start sm:px-3"
+        >
+          <Search className="h-4 w-4 shrink-0" />
+          <span className="hidden truncate sm:inline">{copy.openPalette}</span>
+          <kbd className="ml-auto hidden rounded-md border border-border px-1.5 py-0.5 font-mono text-xs md:inline">
+            ⌘K
+          </kbd>
+        </button>
+      )}
+      <CommandDialog
+        open={open}
+        onOpenChange={setOpen}
+        onCloseAutoFocus={(event) => {
+          if (trigger?.isConnected) {
+            event.preventDefault();
+            trigger.focus();
+          }
+        }}
       >
-        <Search className="h-4 w-4 shrink-0" />
-        <span className="hidden truncate sm:inline">{copy.openPalette}</span>
-        <kbd className="ml-auto hidden rounded-md border border-border px-1.5 py-0.5 font-mono text-xs md:inline">
-          ⌘K
-        </kbd>
-      </button>
-      <CommandDialog open={open} onOpenChange={setOpen}>
         <DialogTitle className="sr-only">{copy.paletteLabel}</DialogTitle>
         <DialogDescription className="sr-only">{copy.placeholder}</DialogDescription>
         <CommandInput placeholder={copy.placeholder} />

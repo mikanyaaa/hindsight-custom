@@ -22,6 +22,9 @@ import {
 import { LanguageSwitcher, useSwitchLocale } from "@/components/language-switcher";
 // CUSTOM-HOOK: frame-quiet-paper-bar begin
 import { CommandPalette } from "@/custom/frame/command-palette";
+import { AtlasBankActions, AtlasThemeSwitch } from "@/custom/frame/atlas-nav";
+import type { FrameView } from "@/custom/frame/nav";
+import Link from "next/link";
 // CUSTOM-HOOK: frame-quiet-paper-bar end
 import { SidebarMenuButton } from "@/components/sidebar";
 import { BankKindSwitch, type BankKind } from "@/components/bank-kind-switch";
@@ -76,6 +79,7 @@ import {
   LogOut,
   Copy,
   Globe,
+  Layers,
   MoreHorizontal,
 } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
@@ -119,9 +123,11 @@ interface BankSelectorProps {
   kind?: BankKind;
   /** The knowledge bank this page shows, if any. */
   knowledgeBankId?: string;
+  /** Active memory-bank section when using the Atlas frame. */
+  atlasTab?: FrameView;
 }
 
-function BankSelectorInner({ kind = "memory", knowledgeBankId }: BankSelectorProps) {
+function BankSelectorInner({ kind = "memory", knowledgeBankId, atlasTab }: BankSelectorProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tNav = useTranslations("nav");
@@ -614,44 +620,114 @@ function BankSelectorInner({ kind = "memory", knowledgeBankId }: BankSelectorPro
     }
   };
 
+  const canAddDocument = knowledgeBankId || (kind === "memory" && currentBank);
+  const addDocumentTrigger = React.useRef<HTMLElement | null>(null);
+  const addDocument = (trigger: HTMLElement | null) => {
+    addDocumentTrigger.current = trigger;
+    if (knowledgeBankId) window.dispatchEvent(new Event(KNOWLEDGE_UPLOAD_EVENT));
+    else setDocDialogOpen(true);
+  };
+  const accountItems = (
+    <>
+      <DropdownMenuItem asChild>
+        <a
+          href="https://github.com/vectorize-io/hindsight"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <Github className="h-4 w-4" />
+          GitHub
+        </a>
+      </DropdownMenuItem>
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger>
+          <Globe className="h-4 w-4" />
+          {localeNames[locale as Locale] ?? locale}
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent>
+          {locales.map((l) => (
+            <DropdownMenuItem
+              key={l}
+              onClick={() => switchLocale(l)}
+              className={l === locale ? "bg-accent" : ""}
+            >
+              {localeNames[l]}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+      {features?.access_key_auth && (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={logout}>
+            <LogOut className="h-4 w-4" />
+            Logout
+          </DropdownMenuItem>
+        </>
+      )}
+    </>
+  );
+
   return (
-    <div className="bg-card text-card-foreground px-3 sm:px-5 py-3 border-b-4 border-primary-gradient">
-      <div className="flex items-center gap-2 sm:gap-4 text-sm">
-        {/* Logo, split so only the mark spins on navigation while the wordmark
+    <div
+      className={
+        atlasTab
+          ? undefined
+          : "bg-card text-card-foreground px-3 sm:px-5 py-3 border-b-4 border-primary-gradient"
+      }
+    >
+      <div className={atlasTab ? "atlas-bank-header" : "flex items-center gap-2 sm:gap-4 text-sm"}>
+        {atlasTab ? (
+          <>
+            <Link
+              href="/dashboard"
+              className="atlas-header-brand"
+              aria-label={tNavBank("allBanks")}
+              title={tNavBank("allBanks")}
+            >
+              Hindsight
+            </Link>
+            <div className="atlas-header-divider" aria-hidden="true" />
+          </>
+        ) : (
+          <>
+            {/* Logo, split so only the mark spins on navigation while the wordmark
             stays put. The mark is the standalone favicon.png (so it can rotate
             freely); the wordmark is the right slice of the full lockup (logo.png)
             shown via a cropped background. Their widths sum to the full logo, so
             the two pieces butt together seamlessly at h-10. */}
-        {/* The logo is the way back to the banks overview, as it is in most apps. */}
-        <button
-          type="button"
-          className="flex shrink-0 items-center h-10 select-none cursor-pointer"
-          aria-label={tNavBank("allBanks")}
-          title={tNavBank("allBanks")}
-          onClick={() => router.push("/dashboard")}
-        >
-          <img
-            src={withBasePath("/favicon.png")}
-            alt=""
-            className={cn("h-10 w-auto", logoSpinning && "animate-logo-wiggle")}
-            onAnimationEnd={() => setLogoSpinning(false)}
-          />
-          {/* The wordmark gives way on phones so the bank picker keeps its room. */}
-          <div
-            className="hidden sm:block h-10 w-[99px]"
-            style={{
-              backgroundImage: `url(${withBasePath("/logo.png")})`,
-              backgroundSize: "auto 100%",
-              backgroundPosition: "right center",
-              backgroundRepeat: "no-repeat",
-            }}
-          />
-        </button>
+            {/* The logo is the way back to the banks overview, as it is in most apps. */}
+            <button
+              type="button"
+              className="flex shrink-0 items-center h-10 select-none cursor-pointer"
+              aria-label={tNavBank("allBanks")}
+              title={tNavBank("allBanks")}
+              onClick={() => router.push("/dashboard")}
+            >
+              <img
+                src={withBasePath("/favicon.png")}
+                alt=""
+                className={cn("h-10 w-auto", logoSpinning && "animate-logo-wiggle")}
+                onAnimationEnd={() => setLogoSpinning(false)}
+              />
+              {/* The wordmark gives way on phones so the bank picker keeps its room. */}
+              <div
+                className="hidden sm:block h-10 w-[99px]"
+                style={{
+                  backgroundImage: `url(${withBasePath("/logo.png")})`,
+                  backgroundSize: "auto 100%",
+                  backgroundPosition: "right center",
+                  backgroundRepeat: "no-repeat",
+                }}
+              />
+            </button>
 
-        {/* Separator */}
-        <div className="hidden sm:block h-8 w-px bg-border" />
+            {/* Separator */}
+            <div className="hidden sm:block h-8 w-px bg-border" />
 
-        {(currentBank || knowledgeBankId) && <SidebarMenuButton />}
+            {knowledgeBankId && <SidebarMenuButton />}
+          </>
+        )}
         {/* Memory Bank Selector */}
         <Popover
           open={open}
@@ -672,8 +748,13 @@ function BankSelectorInner({ kind = "memory", knowledgeBankId }: BankSelectorPro
               variant="outline"
               role="combobox"
               aria-expanded={open}
-              className="min-w-0 flex-1 sm:flex-none sm:w-[250px] justify-between font-bold border-2 border-primary hover:bg-accent"
+              className={
+                atlasTab
+                  ? "atlas-bank-picker atlas-glass"
+                  : "min-w-0 flex-1 sm:flex-none sm:w-[250px] justify-between font-bold border-2 border-primary hover:bg-accent"
+              }
             >
+              {atlasTab && <Layers aria-hidden="true" />}
               <span className="truncate">
                 {/* On a knowledge page the page IS that bank, so the trigger names
                         it, not whichever memory bank was picked last. The placeholder
@@ -681,7 +762,11 @@ function BankSelectorInner({ kind = "memory", knowledgeBankId }: BankSelectorPro
                 {(kind === "knowledge" ? knowledgeBankId : currentBankName || currentBank) ||
                   tNavBank("select")}
               </span>
-              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              {atlasTab ? (
+                <ChevronDown aria-hidden="true" />
+              ) : (
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              )}
             </Button>
           </PopoverTrigger>
           <PopoverContent
@@ -957,133 +1042,110 @@ function BankSelectorInner({ kind = "memory", knowledgeBankId }: BankSelectorPro
           </PopoverContent>
         </Popover>
 
-        <CommandPalette />
+        {atlasTab ? (
+          <>
+            <AtlasBankActions
+              bankId={currentBank}
+              currentTab={atlasTab}
+              addDocumentLabel={tAddDocument("addDocumentButton")}
+              addDocumentTitle={tAddDocument("addDocumentToCurrentBank")}
+              onAddDocument={addDocument}
+              accountItems={accountItems}
+            />
+            <AtlasThemeSwitch theme={theme} toggleTheme={toggleTheme} />
+          </>
+        ) : (
+          <>
+            <CommandPalette />
 
-        {/* Separator */}
-        <div className="hidden sm:block h-8 w-px bg-border" />
+            {/* Separator */}
+            <div className="hidden sm:block h-8 w-px bg-border" />
 
-        {/* Add Document Button — icon only on phones. On a knowledge bank the page
+            {/* Add Document Button — icon only on phones. On a knowledge bank the page
                 owns the upload dialog (a different form), so the header asks for it by
                 event instead of reaching into that page's state. */}
-        {(knowledgeBankId || (kind === "memory" && currentBank)) && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="shrink-0 gap-1.5 px-2.5 sm:px-3"
-            onClick={() =>
-              knowledgeBankId
-                ? window.dispatchEvent(new Event(KNOWLEDGE_UPLOAD_EVENT))
-                : setDocDialogOpen(true)
-            }
-            title={tAddDocument("addDocumentToCurrentBank")}
-            aria-label={tAddDocument("addDocumentButton")}
-            data-add-document
-          >
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">{tAddDocument("addDocumentButton")}</span>
-          </Button>
-        )}
+            {canAddDocument && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0 gap-1.5 px-2.5 sm:px-3"
+                onClick={(event) => addDocument(event.currentTarget)}
+                title={tAddDocument("addDocumentToCurrentBank")}
+                aria-label={tAddDocument("addDocumentButton")}
+                data-add-document
+              >
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline">{tAddDocument("addDocumentButton")}</span>
+              </Button>
+            )}
 
-        {/* Spacer */}
-        <div className="hidden sm:block flex-1" />
+            {/* Spacer */}
+            <div className="hidden sm:block flex-1" />
 
-        {/* Phones: GitHub, language and logout fold into one menu. Theme stays in the bar. */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
+            {/* Phones: GitHub, language and logout fold into one menu. Theme stays in the bar. */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="md:hidden shrink-0 ml-auto"
+                  aria-label={tNav("more")}
+                  title={tNav("more")}
+                >
+                  <MoreHorizontal className="h-5 w-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52">
+                {accountItems}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             <Button
               variant="ghost"
               size="icon"
-              className="md:hidden shrink-0 ml-auto"
-              aria-label={tNav("more")}
-              title={tNav("more")}
+              onClick={toggleTheme}
+              className="h-11 w-11 shrink-0"
+              title={theme === "light" ? tNav("darkMode") : tNav("lightMode")}
+              aria-label={theme === "light" ? tNav("darkMode") : tNav("lightMode")}
             >
-              <MoreHorizontal className="h-5 w-5" />
+              {theme === "light" ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52">
-            <DropdownMenuItem asChild>
+
+            <div className="hidden md:contents">
+              {/* GitHub Link */}
               <a
                 href="https://github.com/vectorize-io/hindsight"
                 target="_blank"
                 rel="noopener noreferrer"
+                className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+                title={tNav("viewOnGitHub")}
               >
-                <Github className="h-4 w-4 mr-2" />
-                GitHub
+                <Github className="h-5 w-5" />
+                <span className="text-sm font-medium">GitHub</span>
               </a>
-            </DropdownMenuItem>
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger>
-                <Globe className="h-4 w-4 mr-2" />
-                {localeNames[locale as Locale] ?? locale}
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent>
-                {locales.map((l) => (
-                  <DropdownMenuItem
-                    key={l}
-                    onClick={() => switchLocale(l)}
-                    className={l === locale ? "bg-accent" : ""}
-                  >
-                    {localeNames[l]}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
-            {features?.access_key_auth && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={logout}>
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Logout
-                </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={toggleTheme}
-          className="h-11 w-11 shrink-0"
-          title={theme === "light" ? tNav("darkMode") : tNav("lightMode")}
-          aria-label={theme === "light" ? tNav("darkMode") : tNav("lightMode")}
-        >
-          {theme === "light" ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
-        </Button>
-
-        <div className="hidden md:contents">
-          {/* GitHub Link */}
-          <a
-            href="https://github.com/vectorize-io/hindsight"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
-            title={tNav("viewOnGitHub")}
-          >
-            <Github className="h-5 w-5" />
-            <span className="text-sm font-medium">GitHub</span>
-          </a>
-
-          {/* Separator */}
-          <div className="h-8 w-px bg-border" />
-
-          <LanguageSwitcher />
-
-          {features?.access_key_auth && (
-            <>
+              {/* Separator */}
               <div className="h-8 w-px bg-border" />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="shrink-0"
-                title="Logout"
-                onClick={logout}
-              >
-                <LogOut className="h-5 w-5" />
-              </Button>
-            </>
-          )}
-        </div>
+
+              <LanguageSwitcher />
+
+              {features?.access_key_auth && (
+                <>
+                  <div className="h-8 w-px bg-border" />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="shrink-0"
+                    title="Logout"
+                    onClick={logout}
+                  >
+                    <LogOut className="h-5 w-5" />
+                  </Button>
+                </>
+              )}
+            </div>
+          </>
+        )}
 
         <CreateKnowledgeBankDialog
           open={createKnowledgeOpen}
@@ -1176,7 +1238,15 @@ function BankSelectorInner({ kind = "memory", knowledgeBankId }: BankSelectorPro
         </Dialog>
 
         <Dialog open={docDialogOpen} onOpenChange={setDocDialogOpen}>
-          <DialogContent className="sm:max-w-[750px] max-h-[90vh] flex flex-col">
+          <DialogContent
+            className="sm:max-w-[750px] max-h-[90vh] flex flex-col"
+            onCloseAutoFocus={(event) => {
+              if (addDocumentTrigger.current?.isConnected) {
+                event.preventDefault();
+                addDocumentTrigger.current.focus();
+              }
+            }}
+          >
             <DialogHeader>
               <DialogTitle>{tAddDocument("dialogTitle")}</DialogTitle>
               <p className="text-sm text-muted-foreground">
@@ -1799,43 +1869,51 @@ export function BankSelector(props: BankSelectorProps = {}) {
   return (
     <Suspense
       fallback={
-        <div className="bg-card text-card-foreground px-3 sm:px-5 py-3 border-b-4 border-primary-gradient">
-          <div className="flex items-center gap-2 sm:gap-4 text-sm">
-            <Image
-              src={withBasePath("/logo.png")}
-              alt="Hindsight"
-              width={40}
-              height={40}
-              className="h-10 w-auto"
-              unoptimized
-            />
-            <div className="hidden sm:block h-8 w-px bg-border" />
-            <Button
-              variant="outline"
-              className="min-w-0 flex-1 sm:flex-none sm:w-[250px] justify-between font-bold border-2 border-primary"
-              disabled
-            >
-              Loading...
-              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-            </Button>
-            <div className="hidden md:contents">
-              <div className="flex-1" />
-              <a
-                href="https://github.com/vectorize-io/hindsight"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-accent transition-colors text-muted-foreground"
+        props.atlasTab ? (
+          <div className="atlas-bank-header" aria-hidden="true">
+            <span className="atlas-header-brand">Hindsight</span>
+            <div className="atlas-header-divider" />
+            <div className="atlas-bank-picker atlas-glass" />
+          </div>
+        ) : (
+          <div className="bg-card text-card-foreground px-3 sm:px-5 py-3 border-b-4 border-primary-gradient">
+            <div className="flex items-center gap-2 sm:gap-4 text-sm">
+              <Image
+                src={withBasePath("/logo.png")}
+                alt="Hindsight"
+                width={40}
+                height={40}
+                className="h-10 w-auto"
+                unoptimized
+              />
+              <div className="hidden sm:block h-8 w-px bg-border" />
+              <Button
+                variant="outline"
+                className="min-w-0 flex-1 sm:flex-none sm:w-[250px] justify-between font-bold border-2 border-primary"
+                disabled
               >
-                <Github className="h-5 w-5" />
-                <span className="text-sm font-medium">GitHub</span>
-              </a>
-              <div className="h-8 w-px bg-border" />
-              <Button variant="ghost" size="icon" disabled>
-                <Moon className="h-5 w-5" />
+                Loading...
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
               </Button>
+              <div className="hidden md:contents">
+                <div className="flex-1" />
+                <a
+                  href="https://github.com/vectorize-io/hindsight"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-accent transition-colors text-muted-foreground"
+                >
+                  <Github className="h-5 w-5" />
+                  <span className="text-sm font-medium">GitHub</span>
+                </a>
+                <div className="h-8 w-px bg-border" />
+                <Button variant="ghost" size="icon" disabled>
+                  <Moon className="h-5 w-5" />
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
+        )
       }
     >
       <BankSelectorInner {...props} />

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 import { MoreHorizontal } from "lucide-react";
 import { bankRoute } from "@/lib/bank-url";
 import { useBank } from "@/lib/bank-context";
@@ -33,7 +34,7 @@ export function QuietTabBar({ currentTab, onTabChange }: QuietTabBarProps) {
     <>
       <nav
         aria-label={copy.navigation}
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card pb-[env(safe-area-inset-bottom)] md:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card pb-[env(safe-area-inset-bottom)] lg:hidden"
       >
         <ul className="grid grid-cols-5">
           {PRIMARY_NAV.map((item) => {
@@ -41,7 +42,7 @@ export function QuietTabBar({ currentTab, onTabChange }: QuietTabBarProps) {
             const current = currentTab === item.id;
             return (
               <li key={item.id}>
-                <a
+                <Link
                   href={bankRoute(currentBank, `?view=${item.id}`)}
                   aria-current={current ? "page" : undefined}
                   aria-label={label(item.id)}
@@ -58,7 +59,7 @@ export function QuietTabBar({ currentTab, onTabChange }: QuietTabBarProps) {
                 >
                   <Icon className="h-5 w-5" />
                   <span className="max-w-full truncate">{label(item.id)}</span>
-                </a>
+                </Link>
               </li>
             );
           })}
@@ -90,7 +91,7 @@ export function QuietTabBar({ currentTab, onTabChange }: QuietTabBarProps) {
               const current = currentTab === item.id;
               return (
                 <li key={item.id}>
-                  <a
+                  <Link
                     href={bankRoute(currentBank, `?view=${item.id}`)}
                     aria-current={current ? "page" : undefined}
                     onClick={(event) => {
@@ -108,7 +109,7 @@ export function QuietTabBar({ currentTab, onTabChange }: QuietTabBarProps) {
                   >
                     <Icon className="h-5 w-5" />
                     {label(item.id)}
-                  </a>
+                  </Link>
                 </li>
               );
             })}

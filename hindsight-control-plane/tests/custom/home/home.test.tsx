@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { groupWeek, harnessId, recallQuery, tagLabel, weekWindow } from "@/custom/home/activity";
 import { homeCopy } from "@/custom/home/copy";
+import { HomeDesk } from "@/custom/home/home-desk";
 
 const push = vi.hoisted(() => vi.fn());
 const listMemories = vi.hoisted(() =>
@@ -35,19 +36,24 @@ vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
   useLocale: () => "en",
 }));
-vi.mock("@/lib/bank-context", () => ({ useBank: () => ({ currentBank: "beispiel-bank" }) }));
-vi.mock("@/components/constellation", () => ({
-  Constellation: ({
+vi.mock("@/lib/bank-context", () => ({
+  useBank: () => ({ currentBank: "beispiel-bank", currentBankName: "Beispiel Studio" }),
+}));
+vi.mock("@/custom/atlas-map/atlas-map", () => ({
+  AtlasMap: ({
     onNodeClick,
-    data,
+    model,
   }: {
     onNodeClick?: (node: { id: string }) => void;
-    data: { nodes: { id: string }[] };
-  }) => (
-    <button type="button" onClick={() => onNodeClick?.(data.nodes[0])}>
-      map-node
-    </button>
-  ),
+    model: { toneById: Map<string, number> } | null;
+  }) => {
+    const id = model?.toneById.keys().next().value;
+    return id ? (
+      <button type="button" onClick={() => onNodeClick?.({ id })}>
+        map-node
+      </button>
+    ) : null;
+  },
 }));
 vi.mock("@/components/memory-detail-modal", () => ({
   MemoryDetailModal: ({ memoryId }: { memoryId: string | null }) =>
@@ -106,7 +112,9 @@ describe("home week", () => {
     );
     expect(groups.map((group) => group.tag)).toEqual(["harness:cursor-cli", "demo", ""]);
     expect(groups[1].count).toBe(2);
-    expect(groupWeek([{ id: "m1", text: "one", tags: ["demo", "other"], at: "a" }], "demo")).toEqual([
+    expect(
+      groupWeek([{ id: "m1", text: "one", tags: ["demo", "other"], at: "a" }], "demo")
+    ).toEqual([
       {
         tag: "demo",
         count: 1,
@@ -120,19 +128,18 @@ describe("home week", () => {
   });
 });
 
-describe("quiet paper home", () => {
+describe("Atlas home", () => {
   beforeEach(() => {
     push.mockClear();
     listMemories.mockClear();
   });
 
-  it("asks from a 48px field and opens that memory from the map", async () => {
-    const { HomeDesk } = await import("@/custom/home/home-desk");
+  it("shows the bank name, submits Recall, opens map memories and filters the week", async () => {
     render(<HomeDesk bankId="beispiel-bank" onNavigate={() => {}} />);
 
+    expect(screen.getByRole("heading", { level: 1, name: "Beispiel Studio" })).toBeTruthy();
     const field = screen.getByRole("textbox", { name: "Recall" });
-    expect(field.className).toContain("h-12");
-    expect(field.className).not.toContain("h-11");
+    expect(field.getAttribute("placeholder")).toBe("Search this bank");
     expect(screen.getByRole("button", { name: /statMemories/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /statDocuments/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /statPages/ })).toBeTruthy();
@@ -147,11 +154,16 @@ describe("quiet paper home", () => {
     fireEvent.click(screen.getByRole("button", { name: "map-node" }));
     expect(screen.getByText("memory:m1")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "demo", pressed: false }));
+    fireEvent.keyDown(screen.getByRole("button", { name: "All tags" }), { key: "Enter" });
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /^demo/ }));
     await waitFor(() =>
       expect(listMemories).toHaveBeenCalledWith(
         "beispiel-bank",
-        expect.objectContaining({ tags: ["demo"], timeField: "created_at" })
+        expect.objectContaining({
+          tags: ["demo"],
+          tagsMatch: "any_strict",
+          timeField: "created_at",
+        })
       )
     );
   });

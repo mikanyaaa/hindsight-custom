@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { frameCopy } from "@/custom/frame/copy";
 import { setSidebarCollapsed, sidebarCollapsedFromCookie } from "@/custom/frame/sidebar-state";
 
@@ -42,7 +42,7 @@ describe("frame copy", () => {
   });
 });
 
-describe("quiet paper frame", () => {
+describe("bank frames", () => {
   beforeEach(() => {
     push.mockClear();
     toggleTheme.mockClear();
@@ -72,6 +72,44 @@ describe("quiet paper frame", () => {
     const reflect = screen.getByRole("link", { name: "reflect" });
     fireEvent.click(reflect);
     expect(onTabChange).toHaveBeenCalledWith("reflect");
+  });
+
+  it("shows the active desktop section and opens the remaining sections and actions with the keyboard", async () => {
+    const { AtlasBankActions } = await import("@/custom/frame/atlas-nav");
+    const addDocument = vi.fn();
+    render(
+      <AtlasBankActions
+        bankId="atlas/2026"
+        currentTab="data"
+        addDocumentLabel="Add Document"
+        addDocumentTitle="Add a document to this bank"
+        onAddDocument={addDocument}
+        accountItems={null}
+      />
+    );
+    const nav = within(screen.getByRole("navigation", { name: "Sections" }));
+    expect(nav.getAllByRole("link").map((link) => link.textContent)).toEqual([
+      "home",
+      "recall",
+      "memories",
+      "pages",
+    ]);
+    expect(nav.getByRole("link", { name: "memories" }).getAttribute("aria-current")).toBe("page");
+    expect(nav.getByRole("link", { name: "memories" }).getAttribute("href")).toBe(
+      "/banks/atlas%2F2026?view=data"
+    );
+
+    const more = nav.getByRole("button", { name: "more" });
+    fireEvent.keyDown(more, { key: "ArrowDown" });
+    expect(screen.getByRole("menuitem", { name: "reflect" }).getAttribute("href")).toBe(
+      "/banks/atlas%2F2026?view=reflect"
+    );
+    fireEvent.click(screen.getByRole("menuitem", { name: "Add Document" }));
+    expect(addDocument).toHaveBeenCalledOnce();
+
+    fireEvent.keyDown(more, { key: "ArrowDown" });
+    fireEvent.click(screen.getByRole("menuitem", { name: "Open the command menu" }));
+    expect(screen.getByRole("dialog")).toBeTruthy();
   });
 
   it("opens the command menu with the keyboard and jumps to a page", async () => {

@@ -15,12 +15,12 @@ describe("graph palette", () => {
     const light = graphPalette(false);
     const dark = graphPalette(true);
     expect(light.background).toBe(token("--background"));
-    expect(dark.background).toBe("#0e0e11");
+    expect(dark.background).toBe("#090a0d");
     expect(light.foreground).toBe(token("--foreground"));
-    expect(dark.foreground).toBe("#f3f1ea");
+    expect(dark.foreground).toBe("#f5f5f7");
     expect(light.accent).toBe(token("--primary"));
-    expect(dark.accent).toBe("#a699ff");
-    expect(dark.onAccent).toBe("#1c1b19");
+    expect(dark.accent).toBe("#78b3ff");
+    expect(dark.onAccent).toBe("#101722");
     expect(GRAPH_LINK.semantic).toBe(token("--chart-1"));
     expect(GRAPH_LINK.temporal).toBe(token("--hs-chart-semantic"));
     expect(GRAPH_LINK.entity).toBe(token("--chart-4"));
@@ -37,7 +37,7 @@ describe("graph palette", () => {
   it("picks ink that stays readable on a saturated fill", () => {
     expect(inkOn("#f59e0b")).toBe("#1c1b19");
     expect(inkOn("#2c82f5")).toBe("#ffffff");
-    expect(inkOn("#a699ff")).toBe("#1c1b19");
+    expect(inkOn("#78b3ff")).toBe("#1c1b19");
     expect(inkOn("not-a-color")).toBe("#ffffff");
   });
 });
