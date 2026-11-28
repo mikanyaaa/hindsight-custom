@@ -49,10 +49,9 @@ export default async function LocaleLayout({
       className={`${geistSans.variable} ${geistMono.variable}${storedTheme === "dark" ? " dark" : ""}`}
       suppressHydrationWarning
     >
-      {/* Parser-blocking. The renderer nests this at the start of body; it still
-          runs before the rest of the body is parsed, so the first paint has .dark. */}
-      <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       <body className="bg-background text-foreground">
+        {/* Apply the persisted appearance before parsing any visible content. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <SidebarCollapsedProvider collapsed={sidebarCollapsed}>
           <ThemeProvider initialTheme={storedTheme ?? "light"}>
             <FeaturesProvider>

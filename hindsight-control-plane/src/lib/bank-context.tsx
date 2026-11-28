@@ -151,7 +151,11 @@ export function BankProvider({ children }: { children: React.ReactNode }) {
   // its name is looked up through the id-filtered list — otherwise the header would
   // fall back to the raw id for any bank sitting past the first page. (`q` is a
   // substring match, hence the exact-id check on the result.)
-  const [fetchedBankName, setFetchedBankName] = useState<string | null>(null);
+  // CUSTOM-HOOK: atlas-bank-name-lookup begin
+  const [fetchedBankName, setFetchedBankName] = useState<{
+    bankId: string;
+    name: string | null;
+  } | null>(null);
   // Same precedence as the selector rows: a promoted alias is the id an operator
   // chose to present the bank under, so it outranks the deprecated free-text name.
   const loaded = bankInfos.find((b) => b.bank_id === currentBank);
@@ -163,15 +167,23 @@ export function BankProvider({ children }: { children: React.ReactNode }) {
       .listBanks({ q: currentBank, limit: 100 })
       .then(({ banks }) => {
         const match = banks.find((bank) => bank.bank_id === currentBank);
-        if (!cancelled) setFetchedBankName(match?.display_alias || match?.name || null);
+        if (!cancelled) {
+          setFetchedBankName({
+            bankId: currentBank,
+            name: match?.display_alias || match?.name || null,
+          });
+        }
       })
       .catch(() => {
-        if (!cancelled) setFetchedBankName(null);
+        if (!cancelled) setFetchedBankName({ bankId: currentBank, name: null });
       });
     return () => {
       cancelled = true;
     };
   }, [currentBank, loadedBankName]);
+  const currentBankName =
+    loadedBankName ?? (fetchedBankName?.bankId === currentBank ? fetchedBankName.name : null);
+  // CUSTOM-HOOK: atlas-bank-name-lookup end
 
   // Initialize bank from URL on mount
   useEffect(() => {
@@ -197,7 +209,7 @@ export function BankProvider({ children }: { children: React.ReactNode }) {
         hasMoreBanks: bankInfos.length < totalBanks,
         totalBanks,
         bankSearch,
-        currentBankName: loadedBankName ?? fetchedBankName,
+        currentBankName,
         searchBanks,
         loadBanks,
         loadMoreBanks,

@@ -47,15 +47,15 @@ const LIGHT: GraphPaint = {
 };
 
 const DARK: GraphPaint = {
-  background: "#0e0e11",
-  card: "#18181c",
-  foreground: "#f3f1ea",
-  muted: "#b7b1a6",
-  border: "rgba(243, 241, 234, 0.14)",
-  accent: "#a699ff",
-  onAccent: "#1c1b19",
-  chip: "#2a2926",
-  chipText: "#e6e1f4",
+  background: "#090a0d",
+  card: "#15171d",
+  foreground: "#f5f5f7",
+  muted: "#b4bac6",
+  border: "rgba(241, 245, 255, 0.14)",
+  accent: "#78b3ff",
+  onAccent: "#101722",
+  chip: "#242933",
+  chipText: "#e3e9f4",
 };
 
 export function graphPalette(dark: boolean): GraphPaint {

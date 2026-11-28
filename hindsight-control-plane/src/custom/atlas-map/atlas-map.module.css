@@ -1,0 +1,246 @@
+.map {
+  --map-border: #fff;
+  --map-text: #111525;
+  --map-muted: #4f5c76;
+  --map-surface: rgba(246, 248, 255, 0.76);
+  --map-control-border: rgba(133, 154, 194, 0.38);
+  --map-control-divider: rgba(132, 155, 194, 0.2);
+  --map-control-hover: rgba(255, 255, 255, 0.92);
+  --map-control-shadow: 0 9px 18px -8px rgba(59, 103, 154, 0.45), inset 0 1px 0 #fff;
+  --map-focus: #1659d9;
+  --map-gutter: clamp(17px, 2.17vw, 34px);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-width: 0;
+  height: clamp(350px, 31vw, 530px);
+  border: 1px solid var(--map-border);
+  border-radius: clamp(25px, 3.48vw, 54px);
+  color: var(--map-text);
+  background:
+    radial-gradient(ellipse at 61% 5%, rgba(248, 239, 252, 0.72), transparent 51%),
+    radial-gradient(ellipse at 7% 76%, rgba(213, 232, 250, 0.78), transparent 73%),
+    linear-gradient(157deg, #ebf1fa 17%, #f2edf8 57%, #e3edf9 97%);
+  box-shadow: 0 14px 34px -26px rgba(47, 77, 127, 0.42);
+}
+
+:global(.dark) .map {
+  --map-border: rgba(160, 175, 206, 0.35);
+  --map-text: #fbfcff;
+  --map-muted: #b5bfd0;
+  --map-surface: rgba(19, 23, 32, 0.83);
+  --map-control-border: rgba(178, 191, 218, 0.3);
+  --map-control-divider: rgba(173, 186, 211, 0.13);
+  --map-control-hover: rgba(75, 86, 111, 0.35);
+  --map-control-shadow: 0 8px 18px -7px #000b, inset 0 1px 0 rgba(216, 226, 253, 0.09);
+  --map-focus: #8ebaff;
+  background:
+    radial-gradient(ellipse at 1% -24%, rgba(114, 127, 149, 0.21), transparent 44%),
+    radial-gradient(ellipse at 52% 91%, rgba(32, 20, 43, 0.52), transparent 45%),
+    linear-gradient(149deg, #171a22 0%, #11141c 55%, #10131a 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(201, 213, 243, 0.11),
+    0 8px 37px rgba(0, 0, 0, 0.2);
+}
+
+.heading,
+.message {
+  z-index: 1;
+  pointer-events: none;
+}
+
+.heading {
+  position: absolute;
+  top: clamp(17px, 1.36vw, 24px);
+  inset-inline-start: var(--map-gutter);
+  margin: 0;
+  font-size: clamp(1.18rem, 1.78vw, 1.68rem);
+  font-weight: 650;
+  line-height: 1.15;
+  letter-spacing: -0.038em;
+}
+
+.scene {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: pan-y;
+  user-select: none;
+}
+
+.scene:active {
+  cursor: grabbing;
+}
+
+.bloom {
+  opacity: 0.87;
+}
+
+:global(.dark) .bloom {
+  opacity: 0.95;
+}
+
+.orb {
+  filter: drop-shadow(0 1.7px 3.1px color-mix(in srgb, currentColor 45%, transparent));
+}
+
+:global(.dark) .orb {
+  filter: drop-shadow(0 0 5.2px color-mix(in srgb, currentColor 79%, transparent));
+}
+
+.node {
+  cursor: pointer;
+}
+
+.target {
+  outline: none;
+}
+
+.node:hover .focusRing {
+  opacity: 0.75;
+}
+
+.target:focus-visible .focusRing {
+  opacity: 1;
+  stroke: var(--map-focus);
+  stroke-width: 2.4;
+}
+
+.focusRing {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.labelArea {
+  display: flex;
+  height: 100%;
+}
+
+.labelArea[data-align="left"] {
+  justify-content: end;
+}
+
+.label {
+  display: flex;
+  width: max-content;
+  max-width: 100%;
+  height: 100%;
+  align-items: center;
+  gap: 0.44em;
+  overflow: hidden;
+  padding: 0 0.69em;
+  border: 1px solid color-mix(in srgb, currentColor 38%, var(--map-border));
+  border-radius: 999px;
+  background: linear-gradient(173deg, rgba(255, 255, 255, 0.08), transparent), var(--map-surface);
+  box-shadow: var(--map-control-shadow);
+  backdrop-filter: blur(13px);
+  font-size: clamp(0.9rem, 1.38vw, 1.25rem);
+  font-weight: 640;
+  letter-spacing: -0.035em;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+
+.labelText {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--map-text);
+  text-overflow: ellipsis;
+}
+
+.dot {
+  width: 0.73em;
+  height: 0.73em;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.34);
+  flex: none;
+}
+
+.message {
+  display: grid;
+  position: absolute;
+  inset: 3rem 1.3rem 1.3rem;
+  place-items: center;
+  color: var(--map-muted);
+  text-align: center;
+  font-size: 0.96rem;
+}
+
+.controls,
+.explore {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid var(--map-control-border);
+  border-radius: 999px;
+  color: var(--map-muted);
+  background: linear-gradient(167deg, rgba(255, 255, 255, 0.055), transparent), var(--map-surface);
+  box-shadow: var(--map-control-shadow);
+  backdrop-filter: blur(14px);
+}
+
+.controls {
+  inset-inline-end: max(13px, calc(var(--map-gutter) - 9px));
+  bottom: clamp(13px, 1.8vw, 28px);
+}
+
+.explore {
+  inset-inline-end: max(13px, calc(var(--map-gutter) - 9px));
+  top: clamp(10px, 0.9vw, 15px);
+}
+
+.controls button,
+.explore {
+  display: grid;
+  place-items: center;
+  width: clamp(44px, 3.2vw, 50px);
+  height: clamp(44px, 3.2vw, 50px);
+  cursor: pointer;
+}
+
+.explore svg {
+  width: 18px;
+  height: 18px;
+}
+
+.controls button + button {
+  border-inline-start: 1px solid var(--map-control-divider);
+}
+
+.controls button svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 1.8px;
+}
+
+.controls button:hover:not(:disabled),
+.explore:hover {
+  background: var(--map-control-hover);
+  color: var(--map-text);
+}
+
+.controls button:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+.controls button:focus-visible,
+.explore:focus-visible {
+  outline: 2px solid var(--map-focus);
+  outline-offset: -4px;
+}
+
+@media (max-width: 639px) {
+  .map {
+    height: clamp(330px, 95vw, 400px);
+  }
+
+  .label {
+    font-size: 0.8rem;
+  }
+}

@@ -1,6 +1,6 @@
 /* Manual Playwright smoke check (Node + in-page browser globals); not part of vitest. */
 /* eslint-disable @typescript-eslint/no-require-imports */
-/* global require, process, console, URL, document, getComputedStyle, innerWidth, localStorage */
+/* global require, process, console, URL, document, getComputedStyle, innerWidth */
 const { chromium } = require("playwright");
 const fs = require("fs");
 const output = process.env.OUTPUT_DIR || "/tmp/hindsight-glass-preview";
@@ -8,7 +8,7 @@ const baseUrl = process.env.BASE_URL || "http://localhost:9999";
 const assert = require("node:assert/strict");
 (async () => {
   const browser = await chromium.launch({
-    executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium",
+    executablePath: process.env.CHROMIUM_PATH,
     headless: true,
     args: ["--no-sandbox"],
   });
@@ -25,18 +25,46 @@ const assert = require("node:assert/strict");
     const banks = [
       {
         bank_id: "atlas",
-        name: "Atlas · Research memory",
+        name: "Studio",
         fact_count: 1248,
         created_at: "2026-10-01T10:00:00Z",
         last_write_at: "2026-10-17T10:00:00Z",
       },
       {
         bank_id: "studio",
-        name: "Studio · Product decisions",
+        name: "Research archive",
         fact_count: 486,
         created_at: "2026-10-05T10:00:00Z",
       },
     ];
+    // Fictional connected communities exercise the same graph response the bank receives.
+    const topics = ["Search", "Research", "Release"];
+    const titles = ["Search ranking decisions", "Onboarding interview notes", "Release checklist"];
+    const groupSizes = [54, 46, 40];
+    const memories = titles.map((text, i) => ({
+      id: `${i}-0`,
+      text,
+      tags: [topics[i]],
+      fact_type: ["world", "experience", "observation"][i],
+      date: new Date(Date.now() - (i + 1) * 86400000).toISOString(),
+    }));
+    const nodes = [];
+    const edges = [];
+    function link(source, target) {
+      edges.push({ data: { source, target, weight: 1 } });
+    }
+    topics.forEach((topic, group) => {
+      const hub = `${group}-0`;
+      if (group > 0) link(`${group - 1}-0`, hub);
+      for (let i = 0; i < groupSizes[group]; i++) {
+        const id = `${group}-${i}`;
+        nodes.push({ data: { id, label: i ? `${topic} note ${i}` : topic } });
+        if (!i) continue;
+        link(hub, id);
+        if (i > 2 && i % 3 !== 0) link(`${group}-${i - 1}`, id);
+        if (i > 10 && i % 4 === 0) link(`${group}-7`, id);
+      }
+    });
     await page.route("**/api/**", async (route) => {
       const url = new URL(route.request().url());
       const p = url.pathname;
@@ -48,10 +76,10 @@ const assert = require("node:assert/strict");
         data = {
           bank_id: "atlas",
           total_nodes: 1248,
-          total_links: 3820,
-          total_documents: 64,
+          total_links: 384,
+          total_documents: 36,
           nodes_by_fact_type: { world: 820, experience: 428 },
-          links_by_link_type: { semantic: 2200, entity: 1200, temporal: 420 },
+          links_by_link_type: { semantic: 244, entity: 108, temporal: 32 },
           pending_operations: 0,
           failed_operations: 0,
           pending_consolidation: 0,
@@ -62,11 +90,11 @@ const assert = require("node:assert/strict");
         };
       else if (p === "/api/graph")
         data = {
-          nodes: Array.from({ length: 40 }, (_, i) => ({
-            data: { id: String(i), label: "Memory " + i, type: i % 2 ? "world" : "experience" },
-          })),
-          edges: Array.from({ length: 60 }, (_, i) => ({
-            data: { source: String(i % 40), target: String((i * 7 + 3) % 40) },
+          nodes,
+          edges,
+          table_rows: nodes.map(({ data }) => ({
+            id: data.id, text: data.label, tags: [topics[Number(data.id.split("-")[0])]],
+            entities: topics[Number(data.id.split("-")[0])], fact_type: "world",
           })),
         };
       else if (p === "/api/pages/tree")
@@ -124,7 +152,11 @@ const assert = require("node:assert/strict");
       else if (/\/(tags|mental-models|directives|operations)$/.test(p))
         data = { items: [], tags: [], total: 0 };
       else if (p.startsWith("/api/banks/")) data = { ...banks[0], config: {}, disposition: {} };
-      else if (p === "/api/list") data = { items: [], total: 0 };
+      else if (p.startsWith("/api/memories/")) {
+        const memory = memories.find((item) => item.id === p.split("/").pop());
+        data = { ...memory, type: memory?.fact_type, entities: [], context: "", state: "valid" };
+      }
+      else if (p === "/api/list") data = { items: memories, total: memories.length };
       else if (p === "/api/entities") data = { items: [], total: 0 };
       await route.fulfill({ json: data });
     });
@@ -142,31 +174,26 @@ const assert = require("node:assert/strict");
     const painted = await page.evaluate(() => ({
       primary: getComputedStyle(document.documentElement).getPropertyValue("--primary").trim(),
       main: getComputedStyle(document.querySelector("main")).backdropFilter,
-      aside: getComputedStyle(document.querySelector("aside")).backdropFilter,
     }));
     const dark = await page.evaluate(() => document.documentElement.classList.contains("dark"));
-    assert.equal(painted.primary, dark ? "#a699ff" : "#5b47d6");
+    assert.equal(painted.primary, dark ? "#78b3ff" : "#5b47d6");
     assert.equal(painted.main, "none");
-    assert.equal(painted.aside, "none");
-    if (process.env.SIDEBAR === "true") {
-      assert.equal(await page.locator('aside a[aria-current="page"]').count(), 1);
-      assert.equal(await page.locator("aside a[aria-label]").count(), 8);
-      const rail = page.locator("aside");
-      const initial = await rail.getAttribute("aria-expanded");
-      await rail.focus();
-      await page.keyboard.press("Enter");
-      assert.notEqual(await rail.getAttribute("aria-expanded"), initial);
-      await page.keyboard.press("Space");
-      assert.equal(await rail.getAttribute("aria-expanded"), initial);
-    }
-    fs.mkdirSync(output, { recursive: true });
-    await page.getByRole("button", { name: "Fullscreen", exact: true }).click();
-    const fullscreen = page.locator("canvas").first().locator("..");
-    assert.equal(
-      await fullscreen.evaluate((el) => el.contains(document.elementFromPoint(10, 10))),
-      true
-    );
+    const nav = page.locator(".atlas-bank-nav");
+    await nav.waitFor();
+    assert.equal(await nav.locator('[aria-current="page"]').count(), 1);
+    const map = page.getByRole("region", { name: "Memory map" });
+    const camera = map.locator("svg > g[transform]");
+    await camera.waitFor();
+    const initialTransform = await camera.getAttribute("transform");
+    await map.getByRole("button", { name: "Zoom in" }).click();
+    assert.notEqual(await camera.getAttribute("transform"), initialTransform);
+    await map.getByRole("button", { name: "Fit map to view" }).click();
+    assert.equal(await camera.getAttribute("transform"), initialTransform);
+    await map.getByRole("button", { name: "Search", exact: true }).focus();
+    await page.keyboard.press("Enter");
+    await page.getByRole("dialog").getByText(titles[0], { exact: true }).waitFor();
     await page.keyboard.press("Escape");
+    fs.mkdirSync(output, { recursive: true });
     for (const view of [
       "data",
       "pages",
@@ -177,8 +204,19 @@ const assert = require("node:assert/strict");
       "profile",
       "home",
     ]) {
-      await page.locator(`aside a[href$="?view=${view}"]`).click();
+      if (["reflect", "documents", "entities", "profile"].includes(view)) {
+        await nav.getByRole("button", { name: /more/i }).click();
+        await page.locator(`[role="menu"] a[href$="?view=${view}"]`).click();
+      } else {
+        await nav.locator(`a[href$="?view=${view}"]`).click();
+      }
       await page.waitForURL(`**?view=${view}`);
+      if (view === "data") {
+        await page.getByRole("button", { name: "Fullscreen", exact: true }).click();
+        const fullscreen = page.locator("canvas").first().locator("..");
+        assert.ok(await fullscreen.evaluate((el) => el.contains(document.elementFromPoint(10, 10))));
+        await page.keyboard.press("Escape");
+      }
       if (view === "data" && process.env.BRAIN === "true") {
         await page.getByRole("button", { name: "Brain", exact: true }).click();
         await page.getByRole("button", { name: "Fullscreen", exact: true }).click();
@@ -192,12 +230,13 @@ const assert = require("node:assert/strict");
       }
     }
     for (const scheme of ["dark", "light"]) {
-      await page.evaluate((s) => {
-        localStorage.setItem("theme", s);
-        document.documentElement.classList.toggle("dark", s === "dark");
-      }, scheme);
-      for (const width of [390, 768, 1440]) {
-        await page.setViewportSize({ width, height: 1000 });
+      if (scheme === "light") {
+        await page.getByRole("button", { name: /light mode|light theme/i }).click();
+        await page.reload();
+      }
+      assert.equal(await page.locator("html").evaluate(el => el.classList.contains("dark")), scheme === "dark");
+      for (const width of [390, 768, 1024, 1440]) {
+        await page.setViewportSize({ width, height: width < 500 ? 844 : 960 });
         await page.waitForTimeout(150);
         const sizes = await page.evaluate(() => ({
           scroll: document.documentElement.scrollWidth,

@@ -8,9 +8,9 @@ const { readFileSync } = require("node:fs");
 const assert = require("node:assert/strict");
 const css = readFileSync(process.env.THEME_CSS || "src/custom/theme/tokens.css", "utf8");
 const source = readFileSync("src/app/[locale]/banks/[bankId]/page.tsx", "utf8");
-const match = source.match(/<main className="([^"]+)">\s*<div className="([^"]+)"/);
+const match = source.match(/<main className="([^"]+)">/);
 if (!match) throw new Error("bank page main wrapper not found");
-const [, mainClass, contentClass] = match;
+const [, mainClass] = match;
 
 (async () => {
   const browser = await chromium.launch({
@@ -38,7 +38,7 @@ const [, mainClass, contentClass] = match;
             <header>Header</header>
             <div class="shell">
               <aside>Nav</aside>
-              <main class="${mainClass}"><div class="${contentClass}">
+              <main class="${mainClass}"><div class="atlas-bank-content--home">
                 <section id="sample"><h1>Bank settings</h1>
                 <p style="color: var(--foreground)">Memory configuration and controls</p>
                 <button id="save" style="background: var(--primary); color: var(--primary-foreground)">Save changes</button>
@@ -58,8 +58,8 @@ const [, mainClass, contentClass] = match;
         assert.equal(shell.main, "none");
         assert.equal(shell.aside, "none");
         assert.match(shell.dialog, /blur/);
-        assert.equal(shell.primary, dark ? "#a699ff" : "#5b47d6");
-        assert.equal(shell.background, dark ? "#0e0e11" : "#faf9f7");
+        assert.equal(shell.primary, dark ? "#78b3ff" : "#5b47d6");
+        assert.equal(shell.background, dark ? "#090a0d" : "#faf9f7");
         assert.equal(
           await page.locator("main > div").evaluate((el) => getComputedStyle(el).zIndex),
           "auto"

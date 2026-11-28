@@ -42,8 +42,8 @@ Docker build args (any value other than `true` leaves the feature off):
 - `NEXT_PUBLIC_HINDSIGHT_BRAIN_ENABLED` — brain memory layout
 - `NEXT_PUBLIC_BASE_PATH` — reverse-proxy base path
 
-Quiet Paper / Night Desk is the control-plane theme. It is part of the
-stylesheet, not a build flag.
+The control plane uses Quiet Paper in light mode and Atlas in dark mode.
+The memory-bank workspace adapts to both appearances.
 
 ## Syncing with upstream
 
@@ -187,24 +187,22 @@ degree 12 is 18_000 links). It is not wired to a bank.
 | `src/components/constellation.tsx` | `graph-frame-dpr` | Cap the backing store. The fullscreen remeasure uses the same helper. |
 | `src/components/constellation.tsx` | `graph-frame-draw` | Cancel a pending sample when input asks for a frame. |
 
-## Quiet Paper / Night Desk
+## Atlas memory-bank workspace
 
-The theme is always on. Tokens, the grain tile and the blocking theme script live in
-`hindsight-control-plane/src/custom/theme/`. There is one accent (`#5B47D6` /
-`#A699FF`), three radii (6 / 10 / 14) and a type scale from 12px to 32px. Glass blur
-is limited to dialogs, menus and popovers. `main` and `aside` stay sharp. The
-`.dark` class comes from the `hs-theme` cookie during server render and from a
-parser-blocking inline script, so the first paint is not the old blue palette.
-The bank frame is a 232px rail (collapse saved on the `hs-sidebar` cookie), a
-command menu in the top bar, and a solid bottom tab bar on phones.
-Buttons, fields, cards, menus and badges take their size from that scale:
-6px for badges and menu items, 10px for controls, 14px for panels, type from
-12px, and a 44px control height. The memory graph uses the same surfaces,
-accent and chart colours. Its canvas reads them from
-`src/custom/theme/graph-palette.ts`. The home page is a 48px recall field,
-four counts, the last seven days of memories grouped by tag, and mental
-models with their freshness beside a short memory map. A point on that map
-opens the memory. Asking from home opens recall with the question filled in.
+Memory banks use horizontal navigation on desktop and a bottom tab bar on
+smaller screens. The bank selector and command menu remain available across
+the workspace. Home opens with the bank name, a Recall search and a map of
+its memories. The map uses the bank's graph response. Selecting a node opens
+that memory. Bank totals, activity from the last seven days and mental models
+follow the map. See the browser captures for [desktop](docs/design/atlas/desktop.webp)
+and [mobile](docs/design/atlas/mobile.webp).
+
+The control plane shares its color tokens and blocking theme script in
+`hindsight-control-plane/src/custom/theme/`. Atlas Dark uses near-black
+surfaces and a blue accent. The saved theme takes precedence over the OS
+preference, and the server reads the `hs-theme` cookie for returning visitors.
+The graph explorer reads its canvas colors from
+`src/custom/theme/graph-palette.ts`.
 List pages share one loading panel, one empty panel and one error panel in
 `src/custom/pages/`. A failed load stays quiet while the session dialog or the
 timeout banner is showing, so an expired session reads as Sitzung abgelaufen
@@ -221,11 +219,12 @@ it, and no GitHub Actions workflow runs it.
 | ----------------------------- | --------------------------------------------------- | --------------------------------------------------------------- |
 | `src/app/globals.css`         | `theme-quiet-paper-entry`                           | Import the token stylesheet into the critical CSS.              |
 | `src/app/[locale]/layout.tsx` | `theme-quiet-paper-fonts`, `theme-quiet-paper-boot`, `frame-quiet-paper-seed` | Geist, theme cookie, blocking script, sidebar cookie. |
+| `src/lib/bank-context.tsx` | `atlas-bank-name-lookup` | Scope the display name to the bank that requested it. |
 | `src/lib/theme-context.tsx`   | `theme-quiet-paper-persist`                         | Keep the saved theme on the `hs-theme` cookie.                  |
 | `src/lib/page-download.tsx`   | `theme-quiet-paper-print`                           | Print margin uses the same accent.                              |
 | `src/components/sidebar.tsx`  | `frame-quiet-paper-rail`                            | 232px rail, saved collapse, phone drawer optional.              |
-| `src/app/[locale]/banks/[bankId]/page.tsx` | `frame-quiet-paper-shell`              | Bottom tab bar and room for it under the page.                  |
-| `src/components/bank-selector.tsx` | `frame-quiet-paper-bar`                       | Command menu and a 44px theme control in the top bar.           |
+| `src/app/[locale]/banks/[bankId]/page.tsx` | `frame-quiet-paper-shell`              | Responsive memory-bank navigation and content area.                  |
+| `src/components/bank-selector.tsx` | `frame-quiet-paper-bar`                       | Bank chooser, workspace navigation, command menu and appearance controls.           |
 | `src/components/ui/button.tsx` | `primitive-quiet-paper-button`                    | 44px buttons, 10px radius, 14px type.                            |
 | `src/components/ui/input.tsx` | `primitive-quiet-paper-input`                     | Fields match the button height and type.                        |
 | `src/components/ui/textarea.tsx` | `primitive-quiet-paper-textarea`               | Same field chrome, room to write.                                |
@@ -242,7 +241,7 @@ it, and no GitHub Actions workflow runs it.
 | `src/components/ui/checkbox.tsx` | `primitive-quiet-paper-check`                  | Unchecked box uses the ink, not the old blue.                    |
 | `src/components/ui/inline-attachment-text.tsx` | `primitive-quiet-paper-attachment` | Attachment labels stay on the type scale.                 |
 | `src/components/constellation.tsx` | `theme-quiet-paper-graph` | Memory graph chrome, links and type use the token palette. |
-| `src/components/home-view.tsx` | `home-quiet-paper-desk` | Home is the recall field, the week, and the short map. |
+| `src/components/home-view.tsx` | `home-quiet-paper-desk` | Mount the memory-bank workspace. |
 | `src/components/search-debug-view.tsx` | `home-quiet-paper-recall` | A question from home runs on the recall page. |
 | `src/components/bank-stats-view.tsx` | `theme-quiet-paper-graph-stats` | Link-type chart matches the graph. |
 

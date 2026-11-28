@@ -5,9 +5,10 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { BankSelector } from "@/components/bank-selector";
-import { Sidebar } from "@/components/sidebar";
 // CUSTOM-HOOK: frame-quiet-paper-shell begin
 import { QuietTabBar } from "@/custom/frame/tab-bar";
+import type { FrameView as NavItem } from "@/custom/frame/nav";
+import "@/custom/frame/atlas-shell.css";
 // CUSTOM-HOOK: frame-quiet-paper-shell end
 import { DataView } from "@/components/data-view";
 import { DocumentsView } from "@/components/documents-view";
@@ -74,15 +75,6 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { LlmHealthDialog } from "@/components/llm-health-dialog";
 
-type NavItem =
-  | "home"
-  | "recall"
-  | "reflect"
-  | "data"
-  | "documents"
-  | "entities"
-  | "pages"
-  | "profile";
 type DataSubTab = "world" | "experience" | "observations";
 type PagesTab = "pages" | "models" | "tree";
 type BankConfigTab =
@@ -339,27 +331,29 @@ export default function BankPage() {
   };
 
   return (
-    // Pinned to the viewport (h-dvh, not min-h-screen) so `main` below is
-    // the only scroll container: with min-h-screen the page itself grew past
-    // the viewport and scrolled the header and sidebar out of view. dvh, not
-    // vh: on iOS 100vh runs under Safari's URL bar and hides the bottom.
-    <div className="h-dvh overflow-hidden bg-background flex flex-col">
-      <div className="shrink-0">
-        <BankSelector />
-      </div>
+    // Keep the header and phone tab bar visible while the page body scrolls.
+    // Dynamic viewport height accounts for the mobile browser chrome.
+    <div className="atlas-bank-shell h-dvh overflow-hidden bg-background flex flex-col">
+      <header className="shrink-0">
+        <BankSelector atlasTab={view} />
+      </header>
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
-        <Sidebar drawer={false} currentTab={view} onTabChange={handleTabChange} />
-
         <main className="flex-1 min-w-0 overflow-y-auto">
-          <div className="px-4 pt-4 sm:px-6 sm:pt-6 pb-[calc(4.75rem+env(safe-area-inset-bottom))] md:pb-6">
-            {/* Content width staircase. Without a cap the views ran the full
-                width of the window, which on a 16" display left body text and
-                table rows spanning ~1700px. The Kit specifies a flat 1024px;
-                the steps at xl/2xl are a Hindsight extension so large displays
-                don't pay ~350px gutters for that cap. One wrapper covers
-                every view because they all sit under this container. */}
-            <div className="max-w-[1024px] xl:max-w-[1280px] 2xl:max-w-[1440px] mx-auto w-full">
+          <div
+            className={
+              view === "home"
+                ? "atlas-bank-content--home"
+                : "px-4 pt-4 sm:px-6 sm:pt-6 pb-[calc(4.75rem+env(safe-area-inset-bottom))] lg:pb-6"
+            }
+          >
+            <div
+              className={
+                view === "home"
+                  ? undefined
+                  : "max-w-[1024px] xl:max-w-[1280px] 2xl:max-w-[1440px] mx-auto w-full"
+              }
+            >
               {/* Bank Configuration Tab */}
               {view === "profile" && (
                 <div>

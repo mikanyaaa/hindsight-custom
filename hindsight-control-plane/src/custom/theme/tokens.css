@@ -1,4 +1,4 @@
-/* Quiet Paper / Night Desk. One token set for both themes.
+/* Quiet Paper / Atlas Dark. One token set for both themes.
    Surfaces, accent, radii and the type scale are defined here and nowhere else.
    Imported from globals.css so Tailwind merges the theme and the first paint
    already has these colors. A client-side import would flash the old palette. */
@@ -80,51 +80,51 @@
 }
 
 .dark {
-  --background: #0e0e11;
-  --foreground: #f3f1ea;
-  --card: #18181c;
-  --card-foreground: #f3f1ea;
-  --popover: #1e1e24;
-  --popover-foreground: #f3f1ea;
-  --primary: #a699ff;
-  --primary-foreground: #1c1b19;
+  --background: #090a0d;
+  --foreground: #f5f5f7;
+  --card: #15171d;
+  --card-foreground: #f5f5f7;
+  --popover: #20232b;
+  --popover-foreground: #f5f5f7;
+  --primary: #78b3ff;
+  --primary-foreground: #101722;
   --primary-gradient: var(--primary);
-  --secondary: #26262c;
-  --secondary-foreground: #f3f1ea;
-  --muted: #26262c;
-  --muted-foreground: #b7b1a6;
-  --accent: #2e2a40;
-  --accent-foreground: #f3f1ea;
+  --secondary: #242730;
+  --secondary-foreground: #f5f5f7;
+  --muted: #242730;
+  --muted-foreground: #b4bac6;
+  --accent: #20344e;
+  --accent-foreground: #f5f5f7;
   /* Light enough to read on the night surface, dark text on the fill.
      A single red cannot be 4.5:1 with both white and #0E0E11. */
   --destructive: #e88984;
-  --destructive-foreground: #1c1b19;
-  --border: rgba(243, 241, 234, 0.14);
-  --input: rgba(243, 241, 234, 0.14);
-  --ring: #a699ff;
+  --destructive-foreground: #101722;
+  --border: rgba(241, 245, 255, 0.14);
+  --input: rgba(241, 245, 255, 0.14);
+  --ring: #78b3ff;
   --chart-1: #2c82f5;
   --chart-2: #10b981;
   --chart-3: #8b5cf6;
   --chart-4: #f59e0b;
   --chart-5: #ec4899;
 
-  --chip-tag: #2a2926;
-  --chip-tag-border: #3d3b36;
-  --chip-entity: #2c2836;
-  --chip-entity-border: #433e52;
-  --chip-meta: #1c1c20;
-  --chip-meta-border: #32323a;
-  --chip-fg: #e6e1f4;
-  --chip-accent: #a699ff;
+  --chip-tag: #242933;
+  --chip-tag-border: #38414f;
+  --chip-entity: #202d40;
+  --chip-entity-border: #394b65;
+  --chip-meta: #1b1f26;
+  --chip-meta-border: #333944;
+  --chip-fg: #e3e9f4;
+  --chip-accent: #78b3ff;
 
-  --sidebar: #121216;
-  --sidebar-foreground: #b7b1a6;
-  --sidebar-primary: #a699ff;
-  --sidebar-primary-foreground: #1c1b19;
-  --sidebar-accent: #2e2a40;
-  --sidebar-accent-foreground: #f3f1ea;
-  --sidebar-border: rgba(243, 241, 234, 0.1);
-  --sidebar-ring: #a699ff;
+  --sidebar: #111419;
+  --sidebar-foreground: #b4bac6;
+  --sidebar-primary: #78b3ff;
+  --sidebar-primary-foreground: #101722;
+  --sidebar-accent: #20344e;
+  --sidebar-accent-foreground: #f5f5f7;
+  --sidebar-border: rgba(241, 245, 255, 0.1);
+  --sidebar-ring: #78b3ff;
 
   --hs-success: #5ee0a8;
   --hs-warning: #f5c16c;
@@ -187,13 +187,17 @@ html {
     128px 128px;
 }
 
+html.dark {
+  background-image: none;
+}
+
 body {
   background-color: transparent;
   background-image: none;
 }
 
 /* Filled accent controls use the accent foreground, including ones that
-   still say text-white. White on #A699FF fails WCAG AA. */
+   still say text-white. White on the light blue accent fails WCAG AA. */
 .bg-primary-gradient {
   color: var(--primary-foreground);
 }
